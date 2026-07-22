@@ -14,9 +14,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen flex-col">
       <header className="flex items-center justify-between border-b px-6 py-3">
-        <Link href="/dashboard" className="font-semibold">
-          SelfSoftware{org ? ` · ${org.name}` : ""}
-        </Link>
+        <div className="flex items-center gap-6">
+          <Link href="/dashboard" className="font-semibold">
+            SelfSoftware{org ? ` · ${org.name}` : ""}
+          </Link>
+          <nav className="flex items-center gap-4 text-sm">
+            <Link href="/dashboard" className="text-muted-foreground hover:text-foreground">
+              Projects
+            </Link>
+            <Link href="/views" className="text-muted-foreground hover:text-foreground">
+              Views
+            </Link>
+          </nav>
+        </div>
         <UserButton />
       </header>
       <main className="flex-1 p-6">{children}</main>

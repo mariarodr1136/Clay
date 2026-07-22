@@ -4,6 +4,7 @@ import { currentUser } from "@clerk/nextjs/server";
 import { db } from "@/server/db/client";
 import { users, organizations, memberships } from "@/server/db/schema";
 import { seedDemoData } from "@/server/db/seed-demo-data";
+import { seedDemoViews } from "@/server/db/seed-demo-views";
 
 export type CurrentContext = {
   userId: string;
@@ -38,7 +39,7 @@ export async function ensureUserOrg(): Promise<CurrentContext> {
     email ||
     "Unnamed";
 
-  const organizationId = await db.transaction(async (tx) => {
+  const { organizationId, didCreate } = await db.transaction(async (tx) => {
     await tx
       .insert(users)
       .values({ id: clerkUser.id, email, name, imageUrl: clerkUser.imageUrl })
@@ -51,16 +52,30 @@ export async function ensureUserOrg(): Promise<CurrentContext> {
       })
       .returning();
 
-    await tx.insert(memberships).values({
-      organizationId: org.id,
-      userId: clerkUser.id,
-      role: "owner",
-    });
+    const insertedMembership = await tx
+      .insert(memberships)
+      .values({ organizationId: org.id, userId: clerkUser.id, role: "owner" })
+      .onConflictDoNothing({ target: memberships.userId })
+      .returning();
 
-    return org.id;
+    if (insertedMembership.length === 0) {
+      // Lost a race against a concurrent first request that already
+      // provisioned this user — use their org, discard the one just created,
+      // and skip seeding (the winner already seeds it).
+      await tx.delete(organizations).where(eq(organizations.id, org.id));
+      const existing = await tx.query.memberships.findFirst({
+        where: eq(memberships.userId, clerkUser.id),
+      });
+      return { organizationId: existing!.organizationId, didCreate: false };
+    }
+
+    return { organizationId: org.id, didCreate: true };
   });
 
-  await seedDemoData(organizationId, clerkUser.id);
+  if (didCreate) {
+    const project = await seedDemoData(organizationId, clerkUser.id);
+    await seedDemoViews(organizationId, clerkUser.id, project.id);
+  }
 
   return { userId: clerkUser.id, organizationId };
 }
