@@ -3,6 +3,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { db } from "@/server/db/client";
 import { tasks, activityLog, taskStatuses, taskPriorities } from "@/server/db/schema";
+import { runCatalogQuery } from "@/server/data-access/catalog";
 
 export const tasksRouter = router({
   listByProject: protectedProcedure
@@ -15,6 +16,21 @@ export const tasksRouter = router({
         ),
         orderBy: asc(tasks.orderIndex),
       });
+    }),
+
+  // Exercises the org-scoped query catalog from real product UI, not just
+  // the agent — same choke point, same guarantees, one code path to trust.
+  stats: protectedProcedure
+    .input(z.object({ projectId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const [statusCounts, overdue] = await Promise.all([
+        runCatalogQuery(ctx.organizationId, "tasksByStatusCount", { projectId: input.projectId }),
+        runCatalogQuery(ctx.organizationId, "overdueTasks", { projectId: input.projectId, limit: 5 }),
+      ]);
+      return {
+        statusCounts: statusCounts as { status: string; count: number }[],
+        overdue: overdue as { id: string; title: string; dueDate: string | null }[],
+      };
     }),
 
   create: protectedProcedure

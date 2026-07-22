@@ -73,10 +73,16 @@ export default function ProjectPage() {
 
   const project = trpc.projects.get.useQuery({ id: projectId });
   const tasksQuery = trpc.tasks.listByProject.useQuery({ projectId });
+  const statsQuery = trpc.tasks.stats.useQuery({ projectId });
+
+  const invalidateAll = () => {
+    utils.tasks.listByProject.invalidate({ projectId });
+    utils.tasks.stats.invalidate({ projectId });
+  };
 
   const createTask = trpc.tasks.create.useMutation({
     onSuccess: () => {
-      utils.tasks.listByProject.invalidate({ projectId });
+      invalidateAll();
       setOpen(false);
       form.reset();
       toast.success("Task created");
@@ -85,12 +91,12 @@ export default function ProjectPage() {
   });
 
   const updateStatus = trpc.tasks.updateStatus.useMutation({
-    onSuccess: () => utils.tasks.listByProject.invalidate({ projectId }),
+    onSuccess: invalidateAll,
     onError: (err) => toast.error(err.message),
   });
 
   const deleteTask = trpc.tasks.delete.useMutation({
-    onSuccess: () => utils.tasks.listByProject.invalidate({ projectId }),
+    onSuccess: invalidateAll,
     onError: (err) => toast.error(err.message),
   });
 
@@ -197,6 +203,19 @@ export default function ProjectPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {statsQuery.data && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          {statsQuery.data.statusCounts.map((s) => (
+            <Badge key={s.status} variant="outline">
+              {statusLabels[s.status] ?? s.status}: {s.count}
+            </Badge>
+          ))}
+          {statsQuery.data.overdue.length > 0 && (
+            <Badge variant="destructive">{statsQuery.data.overdue.length} overdue</Badge>
+          )}
+        </div>
+      )}
 
       {tasksQuery.isLoading && <p className="text-muted-foreground text-sm">Loading…</p>}
 
