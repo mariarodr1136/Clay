@@ -1,3 +1,7 @@
-// Substrate data model tables will be added here in Phase 1
-// (organizations, memberships, users, projects, tasks, comments, activity_log).
-export {};
+export * from "./organizations";
+export * from "./users";
+export * from "./memberships";
+export * from "./projects";
+export * from "./tasks";
+export * from "./comments";
+export * from "./activity-log";
