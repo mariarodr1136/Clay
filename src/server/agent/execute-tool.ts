@@ -5,7 +5,12 @@ import { getViewTool } from "./tools/get-view";
 import { proposeViewTool } from "./tools/propose-view";
 import { listQueryCatalog } from "@/server/data-access/catalog";
 
-export type ExecuteContext = { organizationId: string; ownerId: string; promptText: string };
+export type ExecuteContext = {
+  organizationId: string;
+  ownerId: string;
+  promptText: string;
+  viewId?: string;
+};
 
 export type ExecuteResult = {
   ok: boolean;
@@ -67,11 +72,12 @@ export async function executeTool(
         return { ok: false, content: parsed.error.message, summary: "Invalid propose_view input" };
       }
       const result = await proposeViewTool(ctx, parsed.data);
+      const verb = ctx.viewId ? "Updated" : "Created";
       return result.ok
         ? {
             ok: true,
-            content: `Created view ${result.viewId}`,
-            summary: `Created view "${result.name}"`,
+            content: `${verb} view ${result.viewId}`,
+            summary: `${verb} view "${result.name}"`,
             viewId: result.viewId,
             name: result.name,
           }

@@ -5,7 +5,8 @@ import { db } from "@/server/db/client";
 import { views, viewVersions } from "@/server/db/schema";
 import { viewSchema } from "@/lib/dsl/schema";
 import { runCatalogQuery } from "@/server/data-access/catalog";
-import { createView } from "@/server/db/create-view";
+import { createView, patchView } from "@/server/db/create-view";
+import type { ViewInput } from "@/lib/dsl/schema";
 
 export const viewsRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -50,5 +51,36 @@ export const viewsRouter = router({
     .input(z.object({ queryId: z.string(), params: z.record(z.string(), z.unknown()).default({}) }))
     .query(async ({ ctx, input }) => {
       return runCatalogQuery(ctx.organizationId, input.queryId, input.params);
+    }),
+
+  listVersions: protectedProcedure
+    .input(z.object({ viewId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const view = await db.query.views.findFirst({
+        where: and(eq(views.id, input.viewId), eq(views.organizationId, ctx.organizationId)),
+      });
+      if (!view) throw new Error("View not found");
+
+      return db.query.viewVersions.findMany({
+        where: eq(viewVersions.viewId, input.viewId),
+        orderBy: desc(viewVersions.createdAt),
+      });
+    }),
+
+  revert: protectedProcedure
+    .input(z.object({ viewId: z.string().uuid(), versionId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const target = await db.query.viewVersions.findFirst({
+        where: and(eq(viewVersions.id, input.versionId), eq(viewVersions.viewId, input.viewId)),
+      });
+      if (!target) throw new Error("Version not found");
+
+      return patchView({
+        organizationId: ctx.organizationId,
+        viewId: input.viewId,
+        schema: target.schemaJson as ViewInput,
+        createdBy: "user",
+        promptText: `Reverted to an earlier version`,
+      });
     }),
 });

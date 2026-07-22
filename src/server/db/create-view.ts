@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "./client";
 import { views, viewVersions, type ViewVersionCreator } from "./schema";
 import type { ViewInput } from "@/lib/dsl/schema";
@@ -38,6 +38,53 @@ export async function createView(params: {
     const [updated] = await tx
       .update(views)
       .set({ currentVersionId: version.id })
+      .where(eq(views.id, view.id))
+      .returning();
+
+    return { view: updated, schema: version.schemaJson as ViewInput };
+  });
+}
+
+// Appends a new version to an existing, org-scoped view rather than
+// creating a new one — this is what makes conversational follow-ups
+// ("make this chart bigger") edit the view in place. parentVersionId is
+// always whatever was current before this call, whether the new content
+// came from an agent edit or a revert, so the version chain stays a
+// faithful history regardless of how a version came to be.
+export async function patchView(params: {
+  organizationId: string;
+  viewId: string;
+  name?: string;
+  schema: ViewInput;
+  createdBy: ViewVersionCreator;
+  promptText?: string;
+}) {
+  return db.transaction(async (tx) => {
+    const view = await tx.query.views.findFirst({
+      where: and(eq(views.id, params.viewId), eq(views.organizationId, params.organizationId)),
+    });
+    if (!view) {
+      throw new Error("View not found");
+    }
+
+    const [version] = await tx
+      .insert(viewVersions)
+      .values({
+        viewId: view.id,
+        schemaJson: params.schema,
+        createdBy: params.createdBy,
+        promptText: params.promptText,
+        parentVersionId: view.currentVersionId,
+      })
+      .returning();
+
+    const [updated] = await tx
+      .update(views)
+      .set({
+        currentVersionId: version.id,
+        name: params.name ?? view.name,
+        updatedAt: new Date(),
+      })
       .where(eq(views.id, view.id))
       .returning();
 

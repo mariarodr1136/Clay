@@ -1,5 +1,5 @@
 import { queryCatalog } from "@/server/data-access/catalog";
-import { createView } from "@/server/db/create-view";
+import { createView, patchView } from "@/server/db/create-view";
 import type { proposeViewInputSchema } from "./schemas";
 import type { z } from "zod";
 
@@ -15,7 +15,10 @@ function invalidQueryIds(schema: z.infer<typeof proposeViewInputSchema>["schema"
 }
 
 export async function proposeViewTool(
-  ctx: { organizationId: string; ownerId: string; promptText: string },
+  // viewId comes from the calling page's context (which view the user has
+  // open), never from the model's tool input — the model can't choose to
+  // overwrite a different view than the one the user is actually looking at.
+  ctx: { organizationId: string; ownerId: string; promptText: string; viewId?: string },
   input: z.infer<typeof proposeViewInputSchema>
 ): Promise<{ ok: true; viewId: string; name: string } | { ok: false; error: string }> {
   const bad = invalidQueryIds(input.schema);
@@ -26,14 +29,27 @@ export async function proposeViewTool(
     };
   }
 
-  const { view } = await createView({
-    organizationId: ctx.organizationId,
-    ownerId: ctx.ownerId,
-    name: input.name,
-    schema: input.schema,
-    createdBy: "agent",
-    promptText: ctx.promptText,
-  });
+  try {
+    const { view } = ctx.viewId
+      ? await patchView({
+          organizationId: ctx.organizationId,
+          viewId: ctx.viewId,
+          name: input.name,
+          schema: input.schema,
+          createdBy: "agent",
+          promptText: ctx.promptText,
+        })
+      : await createView({
+          organizationId: ctx.organizationId,
+          ownerId: ctx.ownerId,
+          name: input.name,
+          schema: input.schema,
+          createdBy: "agent",
+          promptText: ctx.promptText,
+        });
 
-  return { ok: true, viewId: view.id, name: view.name };
+    return { ok: true, viewId: view.id, name: view.name };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }

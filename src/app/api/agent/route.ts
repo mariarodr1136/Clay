@@ -3,13 +3,18 @@ import { and, eq } from "drizzle-orm";
 import { auth } from "@clerk/nextjs/server";
 import { ensureUserOrg } from "@/server/auth/ensure-user-org";
 import { db } from "@/server/db/client";
-import { projects } from "@/server/db/schema";
+import { projects, views } from "@/server/db/schema";
 import { runAgentLoop, type AgentEvent } from "@/server/agent/loop";
 
-const bodySchema = z.object({
-  message: z.string().min(1).max(2000),
-  projectId: z.string().uuid(),
-});
+const bodySchema = z
+  .object({
+    message: z.string().min(1).max(2000),
+    projectId: z.string().uuid().optional(),
+    viewId: z.string().uuid().optional(),
+  })
+  .refine((body) => body.projectId || body.viewId, {
+    message: "Either projectId (new view) or viewId (refine an existing view) is required",
+  });
 
 export async function POST(req: Request) {
   const { userId: clerkUserId } = await auth();
@@ -35,12 +40,27 @@ export async function POST(req: Request) {
   }
 
   const { organizationId, userId } = await ensureUserOrg();
+  const { message, projectId, viewId } = parsed.data;
 
-  const project = await db.query.projects.findFirst({
-    where: and(eq(projects.id, parsed.data.projectId), eq(projects.organizationId, organizationId)),
-  });
-  if (!project) {
-    return Response.json({ error: "Project not found" }, { status: 404 });
+  let viewName: string | undefined;
+
+  if (projectId) {
+    const project = await db.query.projects.findFirst({
+      where: and(eq(projects.id, projectId), eq(projects.organizationId, organizationId)),
+    });
+    if (!project) {
+      return Response.json({ error: "Project not found" }, { status: 404 });
+    }
+  }
+
+  if (viewId) {
+    const view = await db.query.views.findFirst({
+      where: and(eq(views.id, viewId), eq(views.organizationId, organizationId)),
+    });
+    if (!view) {
+      return Response.json({ error: "View not found" }, { status: 404 });
+    }
+    viewName = view.name;
   }
 
   const stream = new ReadableStream<Uint8Array>({
@@ -54,8 +74,10 @@ export async function POST(req: Request) {
           apiKey,
           organizationId,
           userId,
-          projectId: parsed.data.projectId,
-          message: parsed.data.message,
+          projectId,
+          viewId,
+          viewName,
+          message,
           emit,
         });
       } finally {

@@ -50,18 +50,22 @@ const tools: Anthropic.Tool[] = [
   },
 ];
 
-function systemPrompt(projectId: string) {
+function systemPrompt(ctx: { projectId?: string; viewId?: string; viewName?: string }) {
+  const contextBlock = ctx.viewId
+    ? `The signed-in user has an existing view open — "${ctx.viewName}" (id: ${ctx.viewId}) — and just asked you for a change to it (e.g. "make this chart bigger," "add a filter"). Call get_view with viewId "${ctx.viewId}" first to see its current widgets and layout, then call propose_view with your revised full schema (widgets you don't want to change should be carried over unchanged, not dropped). Your propose_view call always patches this same view as a new version — you cannot create a separate new view in this conversation.`
+    : `The signed-in user is looking at project ${ctx.projectId} and just asked you for a new view: a small dashboard of widgets answering their request. When a widget's data should be scoped to that project, set dataBinding.params.projectId to "${ctx.projectId}" — omit it to query across the whole organization instead.`;
+
   return `You are the agent behind SelfSoftware's "ask your interface into existence" feature — a project/task tracker where users describe a view in natural language and you build it against their real data.
 
-The signed-in user is looking at project ${projectId} and just asked you for a view: a small dashboard of widgets answering their request.
+${contextBlock}
 
 Widgets are declarative, never code: table, kpi, chart, filterBar, text, form, computedField. A data-bound widget's dataBinding is { queryId, params } where queryId must be one of the query catalog's ids — you never write SQL or generate arbitrary code, only select and parameterize existing safe queries. Chart widgets support chartType "bar" or "line" only.
 
-Call list_query_catalog first if you don't already know the exact catalog ids and their params. Use run_query to sanity-check real data when it would help you pick better widget config (e.g. confirm actual status values). When a widget's data should be scoped to the project the user is looking at, set dataBinding.params.projectId to "${projectId}" — omit it to query across the whole organization instead.
+Call list_query_catalog if you don't already know the exact catalog ids and their params. Use run_query to sanity-check real data when it would help you pick better widget config (e.g. confirm actual status values).
 
 Keep views focused: usually 1-4 widgets, laid out on a 12-column grid (x 0-11, y from 0, w/h in grid units). Every widget id used in "widgets" must also appear in "layout.widgets".
 
-End by calling propose_view exactly once with your best answer — that call is what actually makes the new view appear for the user, so don't stop before making it unless the request is impossible to satisfy with the available catalog (in which case explain why in text instead).`;
+End by calling propose_view exactly once with your best answer — that call is what actually makes the change appear for the user, so don't stop before making it unless the request is impossible to satisfy with the available catalog (in which case explain why in text instead).`;
 }
 
 export type AgentEvent =
@@ -76,11 +80,13 @@ export async function runAgentLoop(params: {
   apiKey: string;
   organizationId: string;
   userId: string;
-  projectId: string;
+  projectId?: string;
+  viewId?: string;
+  viewName?: string;
   message: string;
   emit: (event: AgentEvent) => void;
 }) {
-  const { apiKey, organizationId, userId, projectId, message, emit } = params;
+  const { apiKey, organizationId, userId, projectId, viewId, viewName, message, emit } = params;
   const client = new Anthropic({ apiKey });
 
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: message }];
@@ -90,7 +96,7 @@ export async function runAgentLoop(params: {
       const response = await client.messages.create({
         model: MODEL,
         max_tokens: MAX_TOKENS,
-        system: systemPrompt(projectId),
+        system: systemPrompt({ projectId, viewId, viewName }),
         tools,
         messages,
       });
@@ -122,6 +128,7 @@ export async function runAgentLoop(params: {
           organizationId,
           ownerId: userId,
           promptText: message,
+          viewId,
         });
 
         emit({ type: "tool_result", name: block.name, ok: result.ok, summary: result.summary });
