@@ -63,9 +63,9 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Ask for a view</h1>
+    <div className="mx-auto max-w-2xl space-y-8">
+      <div className="space-y-1.5">
+        <h1 className="text-3xl font-semibold tracking-tight">Ask for a view</h1>
         <p className="text-muted-foreground text-sm">
           Describe a dashboard you want and it gets built against your real task data.
         </p>

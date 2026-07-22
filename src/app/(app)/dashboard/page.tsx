@@ -54,9 +54,9 @@ export default function DashboardPage() {
   });
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Projects</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Projects</h1>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>New project</Button>
@@ -116,12 +116,12 @@ export default function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2">
         {projectsQuery.data?.map((project) => (
           <Link key={project.id} href={`/projects/${project.id}`}>
-            <Card className="h-full transition-colors hover:bg-muted/50">
+            <Card className="h-full transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(0,0,0,0.04),0_16px_40px_-14px_rgba(0,0,0,0.14)]">
               <CardHeader>
-                <CardTitle>{project.name}</CardTitle>
+                <CardTitle className="text-base">{project.name}</CardTitle>
               </CardHeader>
               {project.description && (
-                <CardContent className="text-muted-foreground text-sm">
+                <CardContent className="text-muted-foreground text-sm leading-relaxed">
                   {project.description}
                 </CardContent>
               )}

@@ -17,7 +17,7 @@ export default async function HealthPage() {
   const dbStatus = await checkDb();
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-4 p-8">
+    <div className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-5 p-8">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

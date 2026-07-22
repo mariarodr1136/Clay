@@ -46,10 +46,10 @@ export default function ViewPage() {
   const isOrgScope = viewQuery.data.view.scope === "org";
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-8">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-semibold">{viewQuery.data.view.name}</h1>
+        <div className="flex items-center gap-2.5">
+          <h1 className="text-3xl font-semibold tracking-tight">{viewQuery.data.view.name}</h1>
           <Badge variant={isOrgScope ? "default" : "outline"}>{viewQuery.data.view.scope}</Badge>
         </div>
         <Button

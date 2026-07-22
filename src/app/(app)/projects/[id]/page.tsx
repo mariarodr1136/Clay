@@ -106,9 +106,9 @@ export default function ProjectPage() {
   });
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">{project.data?.name ?? "…"}</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">{project.data?.name ?? "…"}</h1>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>New task</Button>
@@ -220,61 +220,63 @@ export default function ProjectPage() {
       {tasksQuery.isLoading && <p className="text-muted-foreground text-sm">Loading…</p>}
 
       {tasksQuery.data && tasksQuery.data.length > 0 && (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Title</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Priority</TableHead>
-              <TableHead>Due</TableHead>
-              <TableHead className="w-10" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {tasksQuery.data.map((task) => (
-              <TableRow key={task.id}>
-                <TableCell className="font-medium">{task.title}</TableCell>
-                <TableCell>
-                  <Select
-                    value={task.status}
-                    onValueChange={(status) =>
-                      updateStatus.mutate({
-                        id: task.id,
-                        status: status as (typeof taskStatuses)[number],
-                      })
-                    }
-                  >
-                    <SelectTrigger size="sm" className="w-36">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {taskStatuses.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {statusLabels[s]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={priorityVariant[task.priority]}>{task.priority}</Badge>
-                </TableCell>
-                <TableCell className="text-muted-foreground text-sm">
-                  {task.dueDate ?? "—"}
-                </TableCell>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => deleteTask.mutate({ id: task.id })}
-                  >
-                    Delete
-                  </Button>
-                </TableCell>
+        <div className="overflow-hidden rounded-2xl bg-card shadow-[0_1px_2px_rgba(0,0,0,0.03),0_10px_30px_-12px_rgba(0,0,0,0.08)] ring-1 ring-black/[0.04]">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Title</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Priority</TableHead>
+                <TableHead>Due</TableHead>
+                <TableHead className="w-10" />
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {tasksQuery.data.map((task) => (
+                <TableRow key={task.id}>
+                  <TableCell className="font-medium">{task.title}</TableCell>
+                  <TableCell>
+                    <Select
+                      value={task.status}
+                      onValueChange={(status) =>
+                        updateStatus.mutate({
+                          id: task.id,
+                          status: status as (typeof taskStatuses)[number],
+                        })
+                      }
+                    >
+                      <SelectTrigger size="sm" className="w-36">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {taskStatuses.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {statusLabels[s]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={priorityVariant[task.priority]}>{task.priority}</Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {task.dueDate ?? "—"}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deleteTask.mutate({ id: task.id })}
+                    >
+                      Delete
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
 
       {tasksQuery.data && tasksQuery.data.length === 0 && (
