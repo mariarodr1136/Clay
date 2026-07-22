@@ -67,11 +67,17 @@ export async function patchView(params: {
       throw new Error("View not found");
     }
 
+    // A patch can never change publish state as a side effect — the stored
+    // snapshot's scope always mirrors the view's real (already-persisted)
+    // scope, regardless of what the caller's schema says. Only
+    // views.publish/unpublish may change it.
+    const schema: ViewInput = { ...params.schema, scope: view.scope };
+
     const [version] = await tx
       .insert(viewVersions)
       .values({
         viewId: view.id,
-        schemaJson: params.schema,
+        schemaJson: schema,
         createdBy: params.createdBy,
         promptText: params.promptText,
         parentVersionId: view.currentVersionId,

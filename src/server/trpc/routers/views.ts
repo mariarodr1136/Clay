@@ -70,6 +70,13 @@ export const viewsRouter = router({
   revert: protectedProcedure
     .input(z.object({ viewId: z.string().uuid(), versionId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
+      // Org ownership is checked before touching the target version's
+      // content at all, not just at the eventual patchView call.
+      const view = await db.query.views.findFirst({
+        where: and(eq(views.id, input.viewId), eq(views.organizationId, ctx.organizationId)),
+      });
+      if (!view) throw new Error("View not found");
+
       const target = await db.query.viewVersions.findFirst({
         where: and(eq(viewVersions.id, input.versionId), eq(viewVersions.viewId, input.viewId)),
       });
@@ -82,5 +89,54 @@ export const viewsRouter = router({
         createdBy: "user",
         promptText: `Reverted to an earlier version`,
       });
+    }),
+
+  // The only sanctioned way a view's scope changes — always an explicit,
+  // separately-invoked user action, never a side effect of create/patch
+  // (see propose-view.ts and patchView).
+  publish: protectedProcedure
+    .input(z.object({ viewId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const [updated] = await db
+        .update(views)
+        .set({ scope: "org", updatedAt: new Date() })
+        .where(and(eq(views.id, input.viewId), eq(views.organizationId, ctx.organizationId)))
+        .returning();
+      if (!updated) throw new Error("View not found");
+      return updated;
+    }),
+
+  // Org-wide audit trail: who/what/when for every view proposal, whether
+  // from the agent or a manual edit — view_versions already captures this,
+  // this just surfaces it across all of an org's views in one place.
+  listActivity: protectedProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(100).default(50) }))
+    .query(async ({ ctx, input }) => {
+      return db
+        .select({
+          id: viewVersions.id,
+          viewId: viewVersions.viewId,
+          viewName: views.name,
+          createdBy: viewVersions.createdBy,
+          promptText: viewVersions.promptText,
+          createdAt: viewVersions.createdAt,
+        })
+        .from(viewVersions)
+        .innerJoin(views, eq(views.id, viewVersions.viewId))
+        .where(eq(views.organizationId, ctx.organizationId))
+        .orderBy(desc(viewVersions.createdAt))
+        .limit(input.limit);
+    }),
+
+  unpublish: protectedProcedure
+    .input(z.object({ viewId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const [updated] = await db
+        .update(views)
+        .set({ scope: "personal", updatedAt: new Date() })
+        .where(and(eq(views.id, input.viewId), eq(views.organizationId, ctx.organizationId)))
+        .returning();
+      if (!updated) throw new Error("View not found");
+      return updated;
     }),
 });

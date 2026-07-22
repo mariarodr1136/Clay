@@ -3,7 +3,13 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 // /api/agent and /api/trpc handle their own auth check internally (via
 // Clerk's auth()) and return a proper JSON 401 rather than the HTML
 // redirect auth.protect() would produce for a non-page request.
-const isProtectedRoute = createRouteMatcher(["/dashboard(.*)", "/projects(.*)", "/views(.*)", "/chat(.*)"]);
+const isProtectedRoute = createRouteMatcher([
+  "/dashboard(.*)",
+  "/projects(.*)",
+  "/views(.*)",
+  "/chat(.*)",
+  "/audit(.*)",
+]);
 
 export default clerkMiddleware(async (auth, req) => {
   if (isProtectedRoute(req)) {

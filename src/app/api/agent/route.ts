@@ -5,6 +5,7 @@ import { ensureUserOrg } from "@/server/auth/ensure-user-org";
 import { db } from "@/server/db/client";
 import { projects, views } from "@/server/db/schema";
 import { runAgentLoop, type AgentEvent } from "@/server/agent/loop";
+import { checkRateLimit } from "@/server/agent/rate-limit";
 
 const bodySchema = z
   .object({
@@ -20,6 +21,14 @@ export async function POST(req: Request) {
   const { userId: clerkUserId } = await auth();
   if (!clerkUserId) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const rateLimit = checkRateLimit(clerkUserId);
+  if (!rateLimit.ok) {
+    return Response.json(
+      { error: `Too many requests — try again in ${rateLimit.retryAfterSeconds}s.` },
+      { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } }
+    );
   }
 
   // BYOK only — there is no owner key configured in this app to fall back
