@@ -46,7 +46,9 @@ export async function ensureUserOrg(): Promise<CurrentContext> {
 
     const [org] = await tx
       .insert(organizations)
-      .values({ name: `${clerkUser.firstName ?? "Personal"}'s Workspace` })
+      .values({
+        name: clerkUser.firstName ? `${clerkUser.firstName}'s Workspace` : "Personal Workspace",
+      })
       .returning();
 
     await tx.insert(memberships).values({
