@@ -25,6 +25,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <Link href="/views" className="text-muted-foreground hover:text-foreground">
               Views
             </Link>
+            <Link href="/chat" className="text-muted-foreground hover:text-foreground">
+              Chat
+            </Link>
           </nav>
         </div>
         <UserButton />

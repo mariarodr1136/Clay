@@ -5,6 +5,7 @@ import { db } from "@/server/db/client";
 import { views, viewVersions } from "@/server/db/schema";
 import { viewSchema } from "@/lib/dsl/schema";
 import { runCatalogQuery } from "@/server/data-access/catalog";
+import { createView } from "@/server/db/create-view";
 
 export const viewsRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -33,39 +34,18 @@ export const viewsRouter = router({
   create: protectedProcedure
     .input(z.object({ name: z.string().min(1).max(200), schema: viewSchema }))
     .mutation(async ({ ctx, input }) => {
-      return db.transaction(async (tx) => {
-        const [view] = await tx
-          .insert(views)
-          .values({
-            organizationId: ctx.organizationId,
-            ownerId: ctx.userId,
-            scope: input.schema.scope,
-            name: input.name,
-          })
-          .returning();
-
-        const [version] = await tx
-          .insert(viewVersions)
-          .values({
-            viewId: view.id,
-            schemaJson: input.schema,
-            createdBy: "user",
-          })
-          .returning();
-
-        const [updated] = await tx
-          .update(views)
-          .set({ currentVersionId: version.id })
-          .where(eq(views.id, view.id))
-          .returning();
-
-        return { view: updated, schema: version.schemaJson };
+      return createView({
+        organizationId: ctx.organizationId,
+        ownerId: ctx.userId,
+        name: input.name,
+        schema: input.schema,
+        createdBy: "user",
       });
     }),
 
-  // The same choke point the agent will call in Phase 5 — queryId/params are
-  // validated against the catalog's own schemas, and organizationId comes
-  // only from the session, never from the client.
+  // The same choke point the agent's run_query tool calls — queryId/params
+  // are validated against the catalog's own schemas, and organizationId
+  // comes only from the session, never from the client.
   runQuery: protectedProcedure
     .input(z.object({ queryId: z.string(), params: z.record(z.string(), z.unknown()).default({}) }))
     .query(async ({ ctx, input }) => {
