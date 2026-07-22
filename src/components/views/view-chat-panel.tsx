@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { Sparkles } from "lucide-react";
 import { useAgentStream } from "@/lib/use-agent-stream";
 import { useByokKey } from "@/lib/use-byok-key";
 import { TranscriptList } from "@/components/agent/transcript-list";
@@ -30,7 +31,10 @@ export function ViewChatPanel({ viewId, onUpdated }: { viewId: string; onUpdated
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Refine with AI</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Sparkles className="text-muted-foreground size-4" />
+          Refine with AI
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-muted-foreground text-xs">

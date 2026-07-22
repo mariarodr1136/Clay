@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { CheckCircle2, XCircle } from "lucide-react";
 import { db } from "@/server/db/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,8 +22,11 @@ export default async function HealthPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
+            <CheckCircle2 className="size-4 text-(--status-done)" />
             App
-            <Badge>ok</Badge>
+            <Badge variant="outline" className="border-transparent bg-accent text-accent-foreground">
+              ok
+            </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>Next.js server is running.</CardContent>
@@ -31,8 +35,20 @@ export default async function HealthPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
+            {dbStatus.ok ? (
+              <CheckCircle2 className="size-4 text-(--status-done)" />
+            ) : (
+              <XCircle className="text-destructive size-4" />
+            )}
             Database
-            <Badge variant={dbStatus.ok ? "default" : "destructive"}>
+            <Badge
+              variant="outline"
+              className={
+                dbStatus.ok
+                  ? "border-transparent bg-accent text-accent-foreground"
+                  : "border-transparent bg-destructive/10 text-destructive"
+              }
+            >
               {dbStatus.ok ? "connected" : "error"}
             </Badge>
           </CardTitle>

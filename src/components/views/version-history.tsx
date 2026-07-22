@@ -1,6 +1,8 @@
 "use client";
 
 import { toast } from "sonner";
+import { formatDistanceToNow } from "date-fns";
+import { History } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,15 +25,27 @@ export function VersionHistory({ viewId, onReverted }: { viewId: string; onRever
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">History</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <History className="text-muted-foreground size-4" />
+          History
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
         {versionsQuery.data.map((version, i) => (
           <div key={version.id} className="flex items-center justify-between gap-3 text-sm">
             <div className="flex min-w-0 items-center gap-2">
-              <Badge variant={i === 0 ? "default" : "outline"}>{version.createdBy}</Badge>
-              <span className="text-muted-foreground truncate">
-                {version.promptText ?? "Created"} · {new Date(version.createdAt).toLocaleString()}
+              <Badge
+                variant="outline"
+                className={i === 0 ? "border-transparent bg-accent text-accent-foreground" : ""}
+              >
+                {version.createdBy}
+              </Badge>
+              <span
+                className="text-muted-foreground truncate"
+                title={new Date(version.createdAt).toLocaleString()}
+              >
+                {version.promptText ?? "Created"} ·{" "}
+                {formatDistanceToNow(new Date(version.createdAt), { addSuffix: true })}
               </span>
             </div>
             {i !== 0 && (

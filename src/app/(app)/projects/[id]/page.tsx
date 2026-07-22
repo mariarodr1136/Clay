@@ -6,8 +6,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { toast } from "sonner";
+import { CheckSquare, Plus, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { taskPriorities, taskStatuses } from "@/server/db/schema";
+import { StatusBadge, PriorityBadge } from "@/components/task-badges";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -43,20 +45,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-const statusLabels: Record<string, string> = {
-  todo: "To do",
-  in_progress: "In progress",
-  in_review: "In review",
-  done: "Done",
-};
-
-const priorityVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  low: "outline",
-  medium: "secondary",
-  high: "default",
-  urgent: "destructive",
-};
 
 const createTaskSchema = z.object({
   title: z.string().min(1, "Title is required").max(300),
@@ -108,10 +96,18 @@ export default function ProjectPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-semibold tracking-tight">{project.data?.name ?? "…"}</h1>
+        <div className="space-y-1">
+          <h1 className="text-3xl font-semibold tracking-tight">{project.data?.name ?? "…"}</h1>
+          {project.data?.description && (
+            <p className="text-muted-foreground max-w-xl text-sm">{project.data.description}</p>
+          )}
+        </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button>New task</Button>
+            <Button>
+              <Plus data-icon="inline-start" />
+              New task
+            </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -171,7 +167,7 @@ export default function ProjectPage() {
                         <SelectContent>
                           {taskPriorities.map((p) => (
                             <SelectItem key={p} value={p}>
-                              {p}
+                              <PriorityBadge priority={p} />
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -207,9 +203,13 @@ export default function ProjectPage() {
       {statsQuery.data && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
           {statsQuery.data.statusCounts.map((s) => (
-            <Badge key={s.status} variant="outline">
-              {statusLabels[s.status] ?? s.status}: {s.count}
-            </Badge>
+            <span
+              key={s.status}
+              className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium"
+            >
+              <StatusBadge status={s.status as (typeof taskStatuses)[number]} />
+              <span className="text-muted-foreground">{s.count}</span>
+            </span>
           ))}
           {statsQuery.data.overdue.length > 0 && (
             <Badge variant="destructive">{statsQuery.data.overdue.length} overdue</Badge>
@@ -233,7 +233,7 @@ export default function ProjectPage() {
             </TableHeader>
             <TableBody>
               {tasksQuery.data.map((task) => (
-                <TableRow key={task.id}>
+                <TableRow key={task.id} className="group/row">
                   <TableCell className="font-medium">{task.title}</TableCell>
                   <TableCell>
                     <Select
@@ -245,20 +245,20 @@ export default function ProjectPage() {
                         })
                       }
                     >
-                      <SelectTrigger size="sm" className="w-36">
+                      <SelectTrigger size="sm" className="w-40 border-transparent bg-transparent hover:bg-muted">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {taskStatuses.map((s) => (
                           <SelectItem key={s} value={s}>
-                            {statusLabels[s]}
+                            <StatusBadge status={s} />
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={priorityVariant[task.priority]}>{task.priority}</Badge>
+                    <PriorityBadge priority={task.priority} />
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {task.dueDate ?? "—"}
@@ -266,10 +266,12 @@ export default function ProjectPage() {
                   <TableCell>
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size="icon-sm"
+                      aria-label="Delete task"
+                      className="text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-100 hover:bg-destructive/10 hover:text-destructive"
                       onClick={() => deleteTask.mutate({ id: task.id })}
                     >
-                      Delete
+                      <Trash2 />
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -280,7 +282,15 @@ export default function ProjectPage() {
       )}
 
       {tasksQuery.data && tasksQuery.data.length === 0 && (
-        <p className="text-muted-foreground text-sm">No tasks yet.</p>
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border py-16 text-center">
+          <div className="flex size-11 items-center justify-center rounded-full bg-muted">
+            <CheckSquare className="size-5 text-muted-foreground" />
+          </div>
+          <p className="text-sm font-medium">No tasks yet</p>
+          <p className="text-muted-foreground max-w-xs text-sm">
+            Add your first task to start tracking progress on this project.
+          </p>
+        </div>
       )}
     </div>
   );

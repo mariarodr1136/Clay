@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { KeyRound, MessageSquareText, Sparkles } from "lucide-react";
 import { buildDemoViews } from "@/fixtures/demo-views";
 import { trpc } from "@/lib/trpc/client";
 import { useAgentStream } from "@/lib/use-agent-stream";
@@ -65,7 +66,12 @@ export default function ChatPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div className="space-y-1.5">
-        <h1 className="text-3xl font-semibold tracking-tight">Ask for a view</h1>
+        <h1 className="flex items-center gap-2.5 text-3xl font-semibold tracking-tight">
+          <span className="flex size-9 items-center justify-center rounded-full bg-accent">
+            <MessageSquareText className="size-4.5 text-accent-foreground" />
+          </span>
+          Ask for a view
+        </h1>
         <p className="text-muted-foreground text-sm">
           Describe a dashboard you want and it gets built against your real task data.
         </p>
@@ -84,7 +90,10 @@ export default function ChatPage() {
           {exampleViews.map((fixture) => (
             <Card key={fixture.name}>
               <CardHeader>
-                <CardTitle className="text-base">&ldquo;{fixture.prompt}&rdquo;</CardTitle>
+                <CardTitle className="flex items-start gap-2 text-base font-normal">
+                  <Sparkles className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  &ldquo;{fixture.prompt}&rdquo;
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 {fixture.view ? (
@@ -100,7 +109,8 @@ export default function ChatPage() {
         </TabsContent>
 
         <TabsContent value="live" className="space-y-4 pt-4">
-          <p className="text-muted-foreground text-sm">
+          <p className="text-muted-foreground flex items-start gap-2 text-sm">
+            <KeyRound className="mt-0.5 size-4 shrink-0" />
             Type any request. Uses your own Anthropic API key — held only in this browser tab, sent
             per-request, never stored on our server.
           </p>

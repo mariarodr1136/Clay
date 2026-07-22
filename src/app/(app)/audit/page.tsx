@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { formatDistanceToNow } from "date-fns";
+import { ScrollText } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -27,7 +29,12 @@ export default function AuditPage() {
       {activityQuery.isLoading && <p className="text-muted-foreground text-sm">Loading…</p>}
 
       {activityQuery.data && activityQuery.data.length === 0 && (
-        <p className="text-muted-foreground text-sm">No activity yet.</p>
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border py-16 text-center">
+          <div className="flex size-11 items-center justify-center rounded-full bg-muted">
+            <ScrollText className="size-5 text-muted-foreground" />
+          </div>
+          <p className="text-sm font-medium">No activity yet</p>
+        </div>
       )}
 
       {activityQuery.data && activityQuery.data.length > 0 && (
@@ -50,15 +57,25 @@ export default function AuditPage() {
                     </Link>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={entry.createdBy === "agent" ? "default" : "outline"}>
+                    <Badge
+                      variant="outline"
+                      className={
+                        entry.createdBy === "agent"
+                          ? "border-transparent bg-accent text-accent-foreground"
+                          : ""
+                      }
+                    >
                       {entry.createdBy}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground max-w-xs truncate text-sm">
                     {entry.promptText ?? "—"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {new Date(entry.createdAt).toLocaleString()}
+                  <TableCell
+                    className="text-muted-foreground text-sm"
+                    title={new Date(entry.createdAt).toLocaleString()}
+                  >
+                    {formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true })}
                   </TableCell>
                 </TableRow>
               ))}
