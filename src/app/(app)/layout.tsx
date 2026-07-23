@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { eq } from "drizzle-orm";
 import { ensureUserOrg } from "@/server/auth/ensure-user-org";
 import { db } from "@/server/db/client";
@@ -19,9 +20,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5 sm:px-8">
           <div className="flex items-center gap-8">
             <Link href="/dashboard" className="flex items-center gap-2.5">
-              <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
-                S
-              </span>
+              <Image src="/logo.png" alt="" width={28} height={28} className="size-7" />
               <span className="text-[15px] font-semibold tracking-tight">Clay</span>
               {org && (
                 <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
