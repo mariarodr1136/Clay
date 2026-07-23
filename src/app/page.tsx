@@ -42,7 +42,7 @@ export default async function Home() {
           <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
             S
           </span>
-          <span className="text-[15px] font-semibold tracking-tight">SelfSoftware</span>
+          <span className="text-[15px] font-semibold tracking-tight">Clay</span>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
@@ -64,7 +64,7 @@ export default async function Home() {
           Ask your interface into existence.
         </h1>
         <p className="text-muted-foreground max-w-xl text-lg text-balance sm:text-xl">
-          SelfSoftware is a project tracker where the UI isn&apos;t fixed. Describe the
+          Clay is a project tracker where the UI isn&apos;t fixed. Describe the
           dashboard you need, and a coding agent builds it — live, against your real data.
         </p>
         <div className="mt-2 flex flex-col gap-3 sm:flex-row">

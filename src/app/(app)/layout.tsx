@@ -22,7 +22,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
                 S
               </span>
-              <span className="text-[15px] font-semibold tracking-tight">SelfSoftware</span>
+              <span className="text-[15px] font-semibold tracking-tight">Clay</span>
               {org && (
                 <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                   {org.name}

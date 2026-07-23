@@ -3,13 +3,13 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: selfsoftware
-      POSTGRES_PASSWORD: selfsoftware
-      POSTGRES_DB: selfsoftware
+      POSTGRES_USER: clay
+      POSTGRES_PASSWORD: clay
+      POSTGRES_DB: clay
     ports:
       - "5432:5432"
     volumes:
-      - selfsoftware_pgdata:/var/lib/postgresql/data
+      - clay_pgdata:/var/lib/postgresql/data
 
 volumes:
-  selfsoftware_pgdata:
+  clay_pgdata:

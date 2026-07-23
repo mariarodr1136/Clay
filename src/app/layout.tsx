@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SelfSoftware",
+  title: "Clay",
   description: "Dynamic software interfaces — ask your interface into existence.",
 };
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-const BYOK_STORAGE_KEY = "selfsoftware_byok_anthropic_key";
+const BYOK_STORAGE_KEY = "clay_byok_anthropic_key";
 
 function readStoredKey() {
   if (typeof window === "undefined") return "";

@@ -55,7 +55,7 @@ function systemPrompt(ctx: { projectId?: string; viewId?: string; viewName?: str
     ? `The signed-in user has an existing view open — "${ctx.viewName}" (id: ${ctx.viewId}) — and just asked you for a change to it (e.g. "make this chart bigger," "add a filter"). Call get_view with viewId "${ctx.viewId}" first to see its current widgets and layout, then call propose_view with your revised full schema (widgets you don't want to change should be carried over unchanged, not dropped). Your propose_view call always patches this same view as a new version — you cannot create a separate new view in this conversation.`
     : `The signed-in user is looking at project ${ctx.projectId} and just asked you for a new view: a small dashboard of widgets answering their request. When a widget's data should be scoped to that project, set dataBinding.params.projectId to "${ctx.projectId}" — omit it to query across the whole organization instead.`;
 
-  return `You are the agent behind SelfSoftware's "ask your interface into existence" feature — a project/task tracker where users describe a view in natural language and you build it against their real data.
+  return `You are the agent behind Clay's "ask your interface into existence" feature — a project/task tracker where users describe a view in natural language and you build it against their real data.
 
 ${contextBlock}
 
