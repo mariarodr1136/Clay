@@ -9,7 +9,7 @@ export default function SignUpPage() {
       >
         <div className="aspect-[3/1] w-[70rem] bg-gradient-to-tr from-[oklch(0.85_0.09_264)] via-[oklch(0.92_0.06_300)] to-[oklch(0.89_0.08_200)] opacity-50" />
       </div>
-      <SignUp />
+      <SignUp fallbackRedirectUrl="/dashboard" />
     </div>
   );
 }
