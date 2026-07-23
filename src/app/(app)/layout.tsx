@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { eq } from "drizzle-orm";
-import { UserButton } from "@clerk/nextjs";
 import { ensureUserOrg } from "@/server/auth/ensure-user-org";
 import { db } from "@/server/db/client";
 import { organizations } from "@/server/db/schema";
 import { AppNav } from "@/components/app-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UserMenu } from "@/components/user-menu";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { organizationId } = await ensureUserOrg();
@@ -33,7 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <UserButton />
+            <UserMenu />
           </div>
         </div>
       </header>
