@@ -1,36 +1,169 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Clay
+
+![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6) ![Next.js](https://img.shields.io/badge/Next.js_16-App_Router-000000) ![React](https://img.shields.io/badge/React_19-Frontend-61DAFB) ![tRPC](https://img.shields.io/badge/tRPC-11-2596BE) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Drizzle_ORM-4169E1) ![Claude](https://img.shields.io/badge/Claude-Agent_Loop-D97757) ![Vitest](https://img.shields.io/badge/Vitest-14_tests-6E9F18)
+
+A project tracker where the UI isn't fixed. Describe the dashboard you need in plain language, and an agent built on the Claude API writes it — live, against your real projects and tasks, in seconds.
+
+Instead of a fixed set of dashboards and a settings menu to configure them, Clay exposes an allow-listed catalog of queries over your data and gives an LLM tool-use loop exactly two abilities: run one of those queries, or propose a view (a small layout of widgets bound to the results). Every request that changes an existing view creates a new version rather than overwriting it, so nothing you or the agent builds is ever lost.
+
+**Try it live:** run locally and open `/demo` for a read-only preview with sample data — no account required.
+
+---
+
+## Table of Contents
+
+- [Highlights](#highlights)
+- [Tech Stack](#tech-stack)
+- [Getting Started](#getting-started)
+- [Project Structure](#project-structure)
+- [How the Agent Works](#how-the-agent-works)
+- [Security Model](#security-model)
+- [Contributing](#contributing)
+- [Contact](#contact)
+
+---
+
+## Highlights
+
+- **Ask for a view, get a view** — type a request like "show tasks by status as a bar chart" and the agent inspects the data model, runs a query to sanity-check the shape of the data, and proposes a fully-formed view in one pass.
+- **Versioned, never overwritten** — every agent edit (and every manual one) writes a new `view_versions` row with a parent pointer, so a view's entire prompt/edit history is always recoverable.
+- **Read-only, allow-listed agent tools** — the agent never writes SQL or touches the database directly. Its only read path is a fixed catalog of org-scoped queries (`tasksList`, `tasksByStatusCount`, `overdueTasks`, `completionsOverTime`, etc.), and every tool call is validated against a Zod schema before it runs.
+- **Bring-your-own-key** — the chat UI takes your own Anthropic API key, held only in the browser tab and sent per-request; there's no server-side key to leak or bill against.
+- **Full audit trail** — every view created or changed in an organization shows up in the audit log, whether it was the agent or a person.
+- **Adversarial test coverage** — a dedicated security suite asserts the agent can never escalate a view to org-wide scope, can't reference an unknown widget type or catalog id, and can't write across an organization boundary even with a version id from the wrong org.
+- **Rate-limited by design** — 10 agent requests per 5-minute window per user, enforced server-side ahead of any Anthropic call.
+- **Real projects and tasks underneath** — a standard project/task tracker (status, priority, due dates, assignees, comments) sits under the generated-view layer, so there's always real data for views to bind to.
+
+---
+
+## Tech Stack
+
+| Layer | Technologies |
+|---|---|
+| **Frontend** | Next.js 16 (App Router, Turbopack), React 19, TypeScript (strict), Tailwind CSS v4, shadcn/ui + Radix primitives, React Hook Form + Zod, Recharts |
+| **Backend** | tRPC 11, Drizzle ORM, PostgreSQL, Next.js Route Handlers |
+| **Auth** | Clerk (organizations provisioned automatically on first sign-in) |
+| **AI** | Anthropic Claude via `@anthropic-ai/sdk`, a bounded tool-use loop (max 6 rounds) over a fixed tool set |
+| **Quality** | Vitest (unit + adversarial security tests), ESLint 9 + typescript-eslint |
+
+---
 
 ## Getting Started
 
-First, run the development server:
+**Prerequisites:** Node.js 20+, npm, Docker (for local Postgres), and a Clerk application (publishable + secret key).
 
 ```bash
+# 1. Clone and install
+git clone https://github.com/mariarodr1136/Clay.git
+cd Clay
+npm install
+
+# 2. Start Postgres
+docker compose up -d
+
+# 3. Configure environment
+cp .env.example .env.local
+# then add your Clerk keys to .env.local:
+#   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+#   CLERK_SECRET_KEY=
+
+# 4. Sync the schema to your database
+npm run db:push
+
+# 5. Run the app
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The app runs at http://localhost:3000. Sign up to get a personal workspace seeded with a sample project and tasks, or visit `/demo` for a read-only preview with no account.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+To use the "ask your interface into existence" chat, paste your own Anthropic API key into the chat panel — it's sent per-request and never stored server-side.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Development Workflow
 
-## Learn More
+| Command | What it does |
+|---|---|
+| `npm run dev` | Runs the Next.js dev server (Turbopack) |
+| `npm test` | Vitest suite — unit tests plus adversarial agent-security tests |
+| `npm run lint` | ESLint across the project |
+| `npm run build` | Production build |
+| `npm run db:push` | Push the Drizzle schema straight to Postgres (no migration files) |
+| `npm run db:studio` | Open Drizzle Studio to browse the database |
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+Clay/
+├── docker-compose.yml               # Local Postgres for development
+├── drizzle.config.ts                # Drizzle Kit config (schema → Postgres via db:push)
+├── src/
+│   ├── app/
+│   │   ├── page.tsx                  # Marketing homepage
+│   │   ├── demo/                     # Public, read-only preview — no auth, sample data
+│   │   ├── sign-in/ sign-up/         # Clerk auth pages
+│   │   ├── (app)/                    # Authenticated app shell
+│   │   │   ├── dashboard/            # Project list
+│   │   │   ├── projects/[id]/        # Task board for a single project
+│   │   │   ├── chat/                 # "Ask for a view" chat (BYOK Anthropic key)
+│   │   │   ├── views/[viewId]/       # A generated view + its version history
+│   │   │   └── audit/                # Org-wide activity log
+│   │   └── api/
+│   │       ├── agent/route.ts        # Runs the Claude tool-use loop for a request
+│   │       └── trpc/[trpc]/          # tRPC route handler
+│   ├── components/                   # UI primitives (shadcn/Radix), agent + view components
+│   ├── lib/                          # tRPC client, task display metadata, shared helpers
+│   └── server/
+│       ├── agent/                    # Tool-use loop, tool executor, rate limiter, tools/
+│       ├── auth/                     # ensureUserOrg — provisions an org + seed data on first sign-in
+│       ├── data-access/              # The query catalog — the agent's only read path
+│       ├── db/                       # Drizzle schema, client, seed data
+│       └── trpc/                     # Routers: projects, tasks, views
+└── src/test/                         # Vitest setup helpers
+```
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## How the Agent Works
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Every request to `/api/agent` runs a bounded tool-use loop (up to 6 rounds) against Claude, with exactly five tools available:
+
+| Tool | Purpose |
+|---|---|
+| `describe_entities` | Describe the data model (projects, tasks) available to build views over |
+| `list_query_catalog` | List the allow-listed, org-scoped queries widgets can bind to |
+| `run_query` | Run one catalog query and inspect the real result before proposing a view |
+| `get_view` | Fetch an existing view's current schema, e.g. to refine it on a follow-up |
+| `propose_view` | Create or patch a view — the agent's only way to answer the user, called exactly once as its final action |
+
+A request either targets a project (building a new view) or an existing view (refining one via a follow-up like "make this chart bigger"). Refinements always produce a new `view_versions` row with a `parentVersionId`, never an in-place edit — so the full history of prompts and schemas behind any view is recoverable at any time.
+
+---
+
+## Security Model
+
+- **Every query is org-scoped server-side.** `organizationId` always comes from the authenticated session — no caller, including the agent, ever supplies it as a parameter.
+- **The agent's only data access is the query catalog** — a fixed, allow-listed set of read queries (`src/server/data-access/catalog.ts`). It cannot write SQL, and it cannot read or write anything outside that catalog.
+- **Every tool call is Zod-validated before it runs.** An invalid `tool_use` block comes back to the model as a normal error result rather than crashing the request, so the model can see what was wrong and retry.
+- **Widget types and catalog ids are allow-listed at persistence time**, independent of what the model returns.
+- **The agent can never escalate a view to organization-wide scope**, on create or on patch — that requires an explicit user action.
+- **Cross-organization writes are rejected**, even when a caller presents a real version id that belongs to a different organization.
+- **Per-user rate limiting** (10 requests / 5 minutes) sits in front of every Anthropic call.
+
+These invariants are covered by a dedicated adversarial test suite (`src/server/agent/security.test.ts`) in addition to the unit tests.
+
+---
+
+## Contributing
+
+Issues and pull requests are welcome.
+
+1. Fork the repository and create a branch (`feat/your-feature` or `fix/your-bug-fix`)
+2. Make your changes and run the checks: `npm run lint && npm test && npm run build`
+3. Push your branch and open a pull request describing your changes and testing performed
+
+---
+
+## Contact
+
+Questions or feedback? Reach out at [mrodr.contact@gmail.com](mailto:mrodr.contact@gmail.com).
