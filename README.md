@@ -28,12 +28,25 @@ Instead of a fixed set of dashboards and a settings menu to configure them, Clay
 
 | | |
 |---|---|
-| ![Project portfolio overview](docs/screenshots/projects.jpg) | ![Task board for a project](docs/screenshots/project-board.jpg) |
-| Project portfolio — status, load, and overdue work across every project at a glance | Task board — status, priority, owner, and points for a single project |
-| ![Agent-generated executive dashboard](docs/screenshots/view-executive-dashboard.jpg) | ![Chat with the view-building agent](docs/screenshots/chat.jpg) |
-| A dashboard the agent generated from one sentence, bound to live catalog queries | "Ask for a view" chat — the agent's tool calls are shown as it builds |
-| ![Audit log of view changes](docs/screenshots/audit-log.jpg) | |
-| Every view created, refined, or published — attributed to the person or agent action behind it | |
+**Project portfolio** — status, load, and overdue work across every project at a glance
+
+![Project portfolio overview](docs/screenshots/projects.jpg)
+
+**Task board** — status, priority, owner, and points for a single project
+
+![Task board for a project](docs/screenshots/project-board.jpg)
+
+**Agent-generated dashboard** — built from one sentence, bound to live catalog queries
+
+![Agent-generated executive dashboard](docs/screenshots/view-executive-dashboard.jpg)
+
+**Chat** — the agent's tool calls shown live as it builds a view
+
+![Chat with the view-building agent](docs/screenshots/chat.jpg)
+
+**Audit log** — every view created, refined, or published, attributed to the person or agent action behind it
+
+![Audit log of view changes](docs/screenshots/audit-log.jpg)
 
 ---
 
