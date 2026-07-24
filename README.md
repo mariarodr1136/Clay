@@ -25,9 +25,10 @@ Instead of a fixed set of dashboards and a settings menu to configure them, Clay
 
 ## Highlights
 
-- **Ask for a view, get a view** — type a request like "show tasks by status as a bar chart" and the agent inspects the data model, runs a query to sanity-check the shape of the data, and proposes a fully-formed view in one pass.
+- **Ask for a view, get a view** — type a request like "build a delivery dashboard with velocity and overdue work" and the agent inspects the data model, runs a query to sanity-check the shape of the data, and proposes a fully-formed view in one pass.
+- **A real widget vocabulary** — KPI tiles (with notes and danger intent), multi-series line/area charts, stacked bars, donuts, progress meters, filter bars, and badge-aware tables — all declarative, Zod-validated, and bound to catalog queries; never generated code.
 - **Versioned, never overwritten** — every agent edit (and every manual one) writes a new `view_versions` row with a parent pointer, so a view's entire prompt/edit history is always recoverable.
-- **Read-only, allow-listed agent tools** — the agent never writes SQL or touches the database directly. Its only read path is a fixed catalog of org-scoped queries (`tasksList`, `tasksByStatusCount`, `overdueTasks`, `completionsOverTime`, etc.), and every tool call is validated against a Zod schema before it runs.
+- **Read-only, allow-listed agent tools** — the agent never writes SQL or touches the database directly. Its only read path is a fixed catalog of org-scoped queries (`tasksList`, `statusByProject`, `openTasksByAssignee`, `overdueTasks`, `upcomingTasks`, `completionsOverTime`, etc.), and every tool call is validated against a Zod schema before it runs.
 - **Bring-your-own-key** — the chat UI takes your own Anthropic API key, held only in the browser tab and sent per-request; there's no server-side key to leak or bill against.
 - **Full audit trail** — every view created or changed in an organization shows up in the audit log, whether it was the agent or a person.
 - **Adversarial test coverage** — a dedicated security suite asserts the agent can never escalate a view to org-wide scope, can't reference an unknown widget type or catalog id, and can't write across an organization boundary even with a version id from the wrong org.
@@ -74,7 +75,7 @@ npm run db:push
 npm run dev
 ```
 
-The app runs at http://localhost:3000. Sign up to get a personal workspace seeded with a sample project and tasks, or visit `/demo` for a read-only preview with no account.
+The app runs at http://localhost:3000. Sign up to get an empty personal workspace with a guided start — create your first project, or load a sample workspace (a seeded project plus generated views) with one click. Or visit `/demo` for a read-only, fully loaded showcase with no account: a six-project portfolio, eight example dashboards, scripted agent conversations, and an audit trail.
 
 To use the "ask your interface into existence" chat, paste your own Anthropic API key into the chat panel — it's sent per-request and never stored server-side.
 
@@ -100,7 +101,7 @@ Clay/
 ├── src/
 │   ├── app/
 │   │   ├── page.tsx                  # Marketing homepage
-│   │   ├── demo/                     # Public, read-only preview — no auth, sample data
+│   │   ├── demo/                     # Public, read-only showcase — sample portfolio, dashboards, scripted agent chats
 │   │   ├── sign-in/ sign-up/         # Clerk auth pages
 │   │   ├── (app)/                    # Authenticated app shell
 │   │   │   ├── dashboard/            # Project list
@@ -111,13 +112,14 @@ Clay/
 │   │   └── api/
 │   │       ├── agent/route.ts        # Runs the Claude tool-use loop for a request
 │   │       └── trpc/[trpc]/          # tRPC route handler
-│   ├── components/                   # UI primitives (shadcn/Radix), agent + view components
-│   ├── lib/                          # tRPC client, task display metadata, shared helpers
+│   ├── components/                   # UI primitives (shadcn/Radix), shared chart core, agent + view components
+│   ├── fixtures/                     # Static demo data + sample-workspace view fixtures
+│   ├── lib/                          # tRPC client, view DSL (Zod), task display metadata
 │   └── server/
 │       ├── agent/                    # Tool-use loop, tool executor, rate limiter, tools/
-│       ├── auth/                     # ensureUserOrg — provisions an org + seed data on first sign-in
+│       ├── auth/                     # ensureUserOrg — provisions an empty org on first sign-in
 │       ├── data-access/              # The query catalog — the agent's only read path
-│       ├── db/                       # Drizzle schema, client, seed data
+│       ├── db/                       # Drizzle schema, client, opt-in sample-workspace seed
 │       └── trpc/                     # Routers: projects, tasks, views
 └── src/test/                         # Vitest setup helpers
 ```
