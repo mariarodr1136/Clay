@@ -1,17 +1,18 @@
 # Clay
 
-![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6) ![Next.js](https://img.shields.io/badge/Next.js_16-App_Router-000000) ![React](https://img.shields.io/badge/React_19-Frontend-61DAFB) ![tRPC](https://img.shields.io/badge/tRPC-11-2596BE) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Drizzle_ORM-4169E1) ![Claude](https://img.shields.io/badge/Claude-Agent_Loop-D97757) ![Vitest](https://img.shields.io/badge/Vitest-14_tests-6E9F18)
+![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6) ![Next.js](https://img.shields.io/badge/Next.js_16-App_Router-000000) ![React](https://img.shields.io/badge/React_19-Frontend-61DAFB) ![tRPC](https://img.shields.io/badge/tRPC-11-2596BE) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Drizzle_ORM-4169E1) ![Claude](https://img.shields.io/badge/Claude-Agent_Loop-D97757) ![Vitest](https://img.shields.io/badge/Vitest-14_tests-6E9F18) ![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000)
 
 A project tracker where the UI isn't fixed. Describe the dashboard you need in plain language, and an agent built on the Claude API writes it — live, against your real projects and tasks, in seconds.
 
 Instead of a fixed set of dashboards and a settings menu to configure them, Clay exposes an allow-listed catalog of queries over your data and gives an LLM tool-use loop exactly two abilities: run one of those queries, or propose a view (a small layout of widgets bound to the results). Every request that changes an existing view creates a new version rather than overwriting it, so nothing you or the agent builds is ever lost.
 
-**Live Demo:** https://clay-gray.vercel.app
+**Live Demo:** [clay-gray.vercel.app](https://clay-gray.vercel.app) — a read-only preview with sample data, no account required. Or run it locally and open `/demo` (see [Getting Started](#getting-started)).
 
 ---
 
 ## Table of Contents
 
+- [Screenshots](#screenshots)
 - [Highlights](#highlights)
 - [Tech Stack](#tech-stack)
 - [Getting Started](#getting-started)
@@ -20,6 +21,19 @@ Instead of a fixed set of dashboards and a settings menu to configure them, Clay
 - [Security Model](#security-model)
 - [Contributing](#contributing)
 - [Contact](#contact)
+
+---
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Project portfolio overview](docs/screenshots/projects.jpg) | ![Task board for a project](docs/screenshots/project-board.jpg) |
+| Project portfolio — status, load, and overdue work across every project at a glance | Task board — status, priority, owner, and points for a single project |
+| ![Agent-generated executive dashboard](docs/screenshots/view-executive-dashboard.jpg) | ![Chat with the view-building agent](docs/screenshots/chat.jpg) |
+| A dashboard the agent generated from one sentence, bound to live catalog queries | "Ask for a view" chat — the agent's tool calls are shown as it builds |
+| ![Audit log of view changes](docs/screenshots/audit-log.jpg) | |
+| Every view created, refined, or published — attributed to the person or agent action behind it | |
 
 ---
 
@@ -78,6 +92,10 @@ npm run dev
 The app runs at http://localhost:3000. Sign up to get an empty personal workspace with a guided start — create your first project, or load a sample workspace (a seeded project plus generated views) with one click. Or visit `/demo` for a read-only, fully loaded showcase with no account: a six-project portfolio, eight example dashboards, scripted agent conversations, and an audit trail.
 
 To use the "ask your interface into existence" chat, paste your own Anthropic API key into the chat panel — it's sent per-request and never stored server-side.
+
+### Deployment
+
+The live demo runs on [Vercel](https://vercel.com), with Postgres on [Neon](https://neon.tech) and a dedicated Clerk instance for public sign-ups. To deploy your own copy: import the repo into Vercel, add a Postgres database (the Neon integration under the project's Storage tab wires up `DATABASE_URL` automatically), set `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`, and push the schema with `npm run db:push` against that database before the first deploy.
 
 ### Development Workflow
 
