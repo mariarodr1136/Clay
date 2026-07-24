@@ -5,9 +5,15 @@ import type { kpiWidgetSchema, computedFieldWidgetSchema } from "@/lib/dsl/schem
 import { useCatalogQuery } from "../use-catalog-query";
 import { Card, CardContent } from "@/components/ui/card";
 
-function aggregate(rows: Record<string, unknown>[], field: string | undefined, mode: "count" | "sum") {
+function aggregate(
+  rows: Record<string, unknown>[],
+  field: string | undefined,
+  mode: "count" | "sum" | "avg"
+) {
   if (mode === "count") return rows.length;
-  return rows.reduce((sum, row) => sum + (Number(row[field ?? ""]) || 0), 0);
+  const sum = rows.reduce((acc, row) => acc + (Number(row[field ?? ""]) || 0), 0);
+  if (mode === "sum") return sum;
+  return rows.length === 0 ? 0 : Math.round((sum / rows.length) * 10) / 10;
 }
 
 type Props = {
@@ -23,14 +29,26 @@ export function KpiWidget({ widget, filters }: Props) {
     value === null ? "—" : widget.config.format === "percent" ? `${value}%` : value.toLocaleString();
 
   return (
-    <Card className="flex h-full flex-col items-center justify-center">
-      <CardContent className="space-y-1 text-center">
+    <Card className="h-full gap-0 py-4">
+      <CardContent className="flex h-full flex-col px-4">
         {query.error ? (
           <p className="text-destructive text-sm">{query.error.message}</p>
         ) : (
           <>
-            <p className="text-3xl font-semibold">{display}</p>
-            <p className="text-muted-foreground text-xs">{widget.config.label}</p>
+            <p className="text-muted-foreground text-xs font-medium">{widget.config.label}</p>
+            <div className="my-auto py-1.5">
+              <p
+                className="text-[28px] leading-none font-semibold tracking-tight"
+                style={
+                  widget.config.intent === "danger" ? { color: "var(--destructive)" } : undefined
+                }
+              >
+                {display}
+              </p>
+              {widget.config.note && (
+                <p className="text-muted-foreground mt-2 text-xs">{widget.config.note}</p>
+              )}
+            </div>
           </>
         )}
       </CardContent>

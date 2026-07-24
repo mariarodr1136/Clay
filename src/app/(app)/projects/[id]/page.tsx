@@ -6,10 +6,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { toast } from "sonner";
+import { format, parseISO } from "date-fns";
 import { CheckSquare, Plus, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { taskPriorities, taskStatuses } from "@/server/db/schema";
+import { statusMeta } from "@/lib/task-display";
 import { StatusBadge, PriorityBadge } from "@/components/task-badges";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -53,11 +56,26 @@ const createTaskSchema = z.object({
   dueDate: z.string().optional(),
 });
 
+function DueCell({ dueDate, status }: { dueDate: string | null; status: string }) {
+  if (!dueDate) return <span className="text-muted-foreground text-sm">—</span>;
+  const today = new Date().toISOString().slice(0, 10);
+  const overdue = status !== "done" && dueDate < today;
+  return (
+    <span
+      className={cn("text-sm", overdue ? "text-destructive font-medium" : "text-muted-foreground")}
+    >
+      {format(parseISO(dueDate), "MMM d")}
+      {overdue && " · overdue"}
+    </span>
+  );
+}
+
 export default function ProjectPage() {
   const params = useParams<{ id: string }>();
   const projectId = params.id;
   const utils = trpc.useUtils();
   const [open, setOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<(typeof taskStatuses)[number] | null>(null);
 
   const project = trpc.projects.get.useQuery({ id: projectId });
   const tasksQuery = trpc.tasks.listByProject.useQuery({ projectId });
@@ -200,19 +218,42 @@ export default function ProjectPage() {
         </Dialog>
       </div>
 
-      {statsQuery.data && (
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          {statsQuery.data.statusCounts.map((s) => (
-            <span
-              key={s.status}
-              className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium"
-            >
-              <StatusBadge status={s.status as (typeof taskStatuses)[number]} />
-              <span className="text-muted-foreground">{s.count}</span>
-            </span>
-          ))}
+      {statsQuery.data && (tasksQuery.data?.length ?? 0) > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setStatusFilter(null)}
+            className={cn(
+              "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+              statusFilter === null
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:text-foreground"
+            )}
+          >
+            All · {tasksQuery.data?.length ?? 0}
+          </button>
+          {taskStatuses.map((status) => {
+            const count =
+              statsQuery.data.statusCounts.find((s) => s.status === status)?.count ?? 0;
+            const active = statusFilter === status;
+            return (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(active ? null : status)}
+                className={cn(
+                  "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                  active
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {statusMeta[status].label} · {count}
+              </button>
+            );
+          })}
           {statsQuery.data.overdue.length > 0 && (
-            <Badge variant="destructive">{statsQuery.data.overdue.length} overdue</Badge>
+            <Badge variant="destructive" className="ml-auto">
+              {statsQuery.data.overdue.length} overdue
+            </Badge>
           )}
         </div>
       )}
@@ -232,7 +273,10 @@ export default function ProjectPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {tasksQuery.data.map((task) => (
+              {(statusFilter
+                ? tasksQuery.data.filter((t) => t.status === statusFilter)
+                : tasksQuery.data
+              ).map((task) => (
                 <TableRow key={task.id} className="group/row">
                   <TableCell className="font-medium">{task.title}</TableCell>
                   <TableCell>
@@ -260,8 +304,8 @@ export default function ProjectPage() {
                   <TableCell>
                     <PriorityBadge priority={task.priority} />
                   </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {task.dueDate ?? "—"}
+                  <TableCell>
+                    <DueCell dueDate={task.dueDate} status={task.status} />
                   </TableCell>
                   <TableCell>
                     <Button
@@ -290,6 +334,10 @@ export default function ProjectPage() {
           <p className="text-muted-foreground max-w-xs text-sm">
             Add your first task to start tracking progress on this project.
           </p>
+          <Button size="sm" onClick={() => setOpen(true)}>
+            <Plus data-icon="inline-start" />
+            Add a task
+          </Button>
         </div>
       )}
     </div>

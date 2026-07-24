@@ -1,19 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { KeyRound, MessageSquareText, Sparkles } from "lucide-react";
-import { buildDemoViews } from "@/fixtures/demo-views";
+import { ArrowUpRight, FolderKanban, KeyRound, MessageSquareText } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { useAgentStream } from "@/lib/use-agent-stream";
 import { useByokKey } from "@/lib/use-byok-key";
 import { TranscriptList } from "@/components/agent/transcript-list";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -22,9 +19,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// Display-only: buildDemoViews's schema depends on projectId, but name/prompt
-// don't, so a placeholder id is fine here — we only read those two fields.
-const EXAMPLE_FIXTURES = buildDemoViews("").map((f) => ({ name: f.name, prompt: f.prompt }));
+// Starting points that exercise the full widget range — clicking one
+// prefills the prompt box, ready to send or edit.
+const promptIdeas = [
+  "Build a delivery dashboard: KPIs for open and overdue work, a stacked bar of task status by project, and a table of what's due this week",
+  "Which tasks are overdue, who owns them, and how bad is it?",
+  "Show completions over the last 30 days as an area chart",
+  "Give me a filterable view of open work by assignee, broken down by status",
+  "Where is the remaining work concentrated? Show it as a donut by project",
+];
 
 export default function ChatPage() {
   const projectsQuery = trpc.projects.list.useQuery();
@@ -39,14 +42,7 @@ export default function ChatPage() {
   // computed from the query result rather than mirrored into state via an
   // effect (there's nothing to keep in sync once loaded).
   const projectId = selectedProjectId || projectsQuery.data?.[0]?.id || "";
-
-  const exampleViews = useMemo(() => {
-    if (!viewsQuery.data) return [];
-    return EXAMPLE_FIXTURES.map((fixture) => ({
-      ...fixture,
-      view: viewsQuery.data.find((v) => v.name === fixture.name),
-    }));
-  }, [viewsQuery.data]);
+  const hasProjects = (projectsQuery.data?.length ?? 0) > 0;
 
   async function handleGenerate() {
     if (!apiKey.trim()) {
@@ -54,7 +50,7 @@ export default function ChatPage() {
       return;
     }
     if (!projectId) {
-      toast.error("No project selected.");
+      toast.error("Create a project first — the agent builds views over its tasks.");
       return;
     }
     if (!message.trim()) return;
@@ -64,93 +60,110 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8">
+    <div className="mx-auto max-w-3xl space-y-8">
       <div className="space-y-1.5">
         <h1 className="flex items-center gap-2.5 text-3xl font-semibold tracking-tight">
-          <span className="flex size-9 items-center justify-center rounded-full bg-accent">
-            <MessageSquareText className="size-4.5 text-accent-foreground" />
+          <span className="bg-accent flex size-9 items-center justify-center rounded-full">
+            <MessageSquareText className="text-accent-foreground size-4.5" />
           </span>
-          Ask for a view
+          Chat
         </h1>
-        <p className="text-muted-foreground text-sm">
-          Describe a dashboard you want and it gets built against your real task data.
+        <p className="text-muted-foreground max-w-2xl text-sm leading-relaxed">
+          Describe the dashboard you need — KPIs, multi-series charts, donuts, meters, filters,
+          tables — and the agent builds it against your real task data, validated against the query
+          catalog. Refine it in follow-ups from the view itself.
         </p>
       </div>
 
-      <Tabs defaultValue="examples">
-        <TabsList>
-          <TabsTrigger value="examples">Examples</TabsTrigger>
-          <TabsTrigger value="live">Live (bring your own key)</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="examples" className="space-y-3 pt-4">
-          <p className="text-muted-foreground text-sm">
-            Pre-generated — free, instant, no API key needed.
-          </p>
-          {exampleViews.map((fixture) => (
-            <Card key={fixture.name}>
-              <CardHeader>
-                <CardTitle className="flex items-start gap-2 text-base font-normal">
-                  <Sparkles className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                  &ldquo;{fixture.prompt}&rdquo;
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {fixture.view ? (
-                  <Button asChild size="sm">
-                    <Link href={`/views/${fixture.view.id}`}>View result</Link>
-                  </Button>
-                ) : (
-                  <p className="text-muted-foreground text-sm">Not available yet.</p>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </TabsContent>
-
-        <TabsContent value="live" className="space-y-4 pt-4">
-          <p className="text-muted-foreground flex items-start gap-2 text-sm">
-            <KeyRound className="mt-0.5 size-4 shrink-0" />
-            Type any request. Uses your own Anthropic API key — held only in this browser tab, sent
-            per-request, never stored on our server.
-          </p>
-
-          <Input
-            type="password"
-            placeholder="sk-ant-..."
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-          />
-
-          {projectsQuery.data && projectsQuery.data.length > 1 && (
-            <Select value={projectId} onValueChange={setSelectedProjectId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Project" />
-              </SelectTrigger>
-              <SelectContent>
-                {projectsQuery.data.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-
-          <Textarea
-            rows={3}
-            placeholder='e.g. "show me tasks by status as a bar chart"'
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-          />
-
-          <Button onClick={handleGenerate} disabled={isRunning || !message.trim()}>
-            {isRunning ? "Generating…" : "Generate"}
+      {projectsQuery.data && !hasProjects && (
+        <div className="border-border flex flex-col items-center gap-4 rounded-3xl border border-dashed py-14 text-center">
+          <div className="bg-muted flex size-11 items-center justify-center rounded-full">
+            <FolderKanban className="text-muted-foreground size-5" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-medium">The agent needs something to chart</p>
+            <p className="text-muted-foreground mx-auto max-w-sm text-sm leading-relaxed">
+              Create a project with a few tasks (or load the sample workspace), then come back and
+              ask for any dashboard.
+            </p>
+          </div>
+          <Button asChild size="sm">
+            <Link href="/dashboard">Go to projects</Link>
           </Button>
+        </div>
+      )}
+
+      {hasProjects && (
+        <>
+          <div className="space-y-4">
+            <p className="text-muted-foreground flex items-start gap-2 text-sm">
+              <KeyRound className="mt-0.5 size-4 shrink-0" />
+              Live mode uses your own Anthropic API key — held only in this browser tab, sent
+              per-request, never stored on our server.
+            </p>
+
+            <Input
+              type="password"
+              placeholder="sk-ant-..."
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+            />
+
+            {projectsQuery.data && projectsQuery.data.length > 1 && (
+              <Select value={projectId} onValueChange={setSelectedProjectId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Project" />
+                </SelectTrigger>
+                <SelectContent>
+                  {projectsQuery.data.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
+            <Textarea
+              rows={3}
+              placeholder='e.g. "build a delivery dashboard with velocity and overdue work"'
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+            />
+
+            <div className="flex flex-wrap gap-1.5">
+              {promptIdeas.map((idea) => (
+                <button
+                  key={idea}
+                  type="button"
+                  onClick={() => setMessage(idea)}
+                  className="border-border bg-card text-muted-foreground hover:border-foreground/20 hover:text-foreground max-w-full truncate rounded-full border px-3 py-1.5 text-left text-xs font-medium transition-colors"
+                  title={idea}
+                >
+                  {idea}
+                </button>
+              ))}
+            </div>
+
+            <Button onClick={handleGenerate} disabled={isRunning || !message.trim()}>
+              {isRunning ? "Generating…" : "Generate"}
+            </Button>
+          </div>
 
           <TranscriptList items={transcript} />
-        </TabsContent>
-      </Tabs>
+        </>
+      )}
+
+      <p className="text-muted-foreground text-xs">
+        Want to see what a full conversation looks like first?{" "}
+        <Link
+          href="/demo/chat"
+          className="text-foreground inline-flex items-center gap-0.5 font-medium hover:underline"
+        >
+          Watch example transcripts in the demo
+          <ArrowUpRight className="size-3" />
+        </Link>
+      </p>
     </div>
   );
 }

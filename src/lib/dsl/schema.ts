@@ -8,6 +8,7 @@ export const widgetTypes = [
   "form",
   "text",
   "computedField",
+  "progress",
 ] as const;
 export type WidgetType = (typeof widgetTypes)[number];
 
@@ -28,20 +29,38 @@ const baseWidget = {
   title: z.string().max(200).optional(),
 };
 
+// Optional presentation hint per column: status/priority render as badges,
+// date gets overdue highlighting, number right-aligns with tabular figures.
+export const tableColumnKinds = ["text", "status", "priority", "date", "number"] as const;
+
 export const tableWidgetSchema = z.object({
   ...baseWidget,
   type: z.literal("table"),
   dataBinding: dataBindingSchema,
   config: z.object({
-    columns: z.array(z.object({ key: z.string(), label: z.string() })).min(1).max(10),
+    columns: z
+      .array(
+        z.object({
+          key: z.string(),
+          label: z.string(),
+          kind: z.enum(tableColumnKinds).optional(),
+        })
+      )
+      .min(1)
+      .max(10),
   }),
 });
 
 const aggregateConfig = z.object({
   field: z.string().optional(),
-  aggregate: z.enum(["count", "sum"]).default("count"),
+  aggregate: z.enum(["count", "sum", "avg"]).default("count"),
   label: z.string().min(1).max(100),
   format: z.enum(["number", "percent"]).default("number"),
+  // A short static caption under the value ("across 3 projects").
+  note: z.string().max(200).optional(),
+  // "danger" renders the value in the destructive color — for figures where
+  // a non-zero value is a problem (overdue counts, blockers).
+  intent: z.enum(["default", "danger"]).optional(),
 });
 
 export const kpiWidgetSchema = z.object({
@@ -61,14 +80,69 @@ export const computedFieldWidgetSchema = z.object({
   config: aggregateConfig,
 });
 
-export const chartWidgetSchema = z.object({
+// Only design tokens, never raw CSS — the renderer wraps this in var(...).
+const colorVarPattern = /^--[a-z0-9-]+$/;
+
+export const chartSeriesSchema = z.object({
+  key: z.string().min(1),
+  label: z.string().min(1).max(60),
+  colorVar: z.string().regex(colorVarPattern).optional(),
+  // Dashed series render as reference lines (planned, ideal pace, targets).
+  dashed: z.boolean().optional(),
+});
+
+export const chartWidgetSchema = z
+  .object({
+    ...baseWidget,
+    type: z.literal("chart"),
+    dataBinding: dataBindingSchema,
+    config: z.object({
+      chartType: z.enum(["bar", "line", "area", "stackedBar", "stackedArea", "donut"]),
+      // Cartesian charts: xField is the category/time axis. Single series can
+      // use yField alone; multi-series charts list series explicitly (each key
+      // is a numeric field on the query's rows).
+      xField: z.string().optional(),
+      yField: z.string().optional(),
+      series: z.array(chartSeriesSchema).min(1).max(5).optional(),
+      // Donut charts only.
+      donut: z
+        .object({
+          nameField: z.string(),
+          valueField: z.string(),
+          centerLabel: z.string().max(40).optional(),
+          maxSlices: z.number().int().min(2).max(5).optional(),
+        })
+        .optional(),
+    }),
+  })
+  .superRefine((widget, ctx) => {
+    const { chartType, xField, yField, series, donut } = widget.config;
+    if (chartType === "donut") {
+      if (!donut) {
+        ctx.addIssue({ code: "custom", message: 'chartType "donut" requires config.donut' });
+      }
+      return;
+    }
+    if (!xField) {
+      ctx.addIssue({ code: "custom", message: `chartType "${chartType}" requires config.xField` });
+    }
+    if (!yField && (!series || series.length === 0)) {
+      ctx.addIssue({
+        code: "custom",
+        message: `chartType "${chartType}" requires config.yField or config.series`,
+      });
+    }
+  });
+
+// Labeled percentage meters, one per row of the bound query (e.g. readiness
+// or completion percent by project/workstream). valueField must be 0-100.
+export const progressWidgetSchema = z.object({
   ...baseWidget,
-  type: z.literal("chart"),
+  type: z.literal("progress"),
   dataBinding: dataBindingSchema,
   config: z.object({
-    chartType: z.enum(["bar", "line"]),
-    xField: z.string(),
-    yField: z.string(),
+    nameField: z.string(),
+    valueField: z.string(),
   }),
 });
 
@@ -111,6 +185,7 @@ export const widgetSchema = z.discriminatedUnion("type", [
   filterBarWidgetSchema,
   textWidgetSchema,
   formWidgetSchema,
+  progressWidgetSchema,
 ]);
 export type Widget = z.infer<typeof widgetSchema>;
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { db } from "@/server/db/client";
 import { views, viewVersions } from "@/server/db/schema";
@@ -9,10 +9,47 @@ import { createView, patchView } from "@/server/db/create-view";
 import type { ViewInput } from "@/lib/dsl/schema";
 
 export const viewsRouter = router({
+  // Views plus the metadata their gallery cards render: the prompt behind
+  // the current version, per-type widget counts, and how many versions exist.
   list: protectedProcedure.query(async ({ ctx }) => {
-    return db.query.views.findMany({
+    const rows = await db.query.views.findMany({
       where: eq(views.organizationId, ctx.organizationId),
-      orderBy: desc(views.createdAt),
+      orderBy: desc(views.updatedAt),
+    });
+
+    const currentIds = rows.flatMap((v) => (v.currentVersionId ? [v.currentVersionId] : []));
+    const currentVersions = currentIds.length
+      ? await db.query.viewVersions.findMany({ where: inArray(viewVersions.id, currentIds) })
+      : [];
+    const versionsById = new Map(currentVersions.map((v) => [v.id, v]));
+
+    const counts = rows.length
+      ? await db
+          .select({ viewId: viewVersions.viewId, count: sql<number>`count(*)::int` })
+          .from(viewVersions)
+          .where(
+            inArray(
+              viewVersions.viewId,
+              rows.map((v) => v.id)
+            )
+          )
+          .groupBy(viewVersions.viewId)
+      : [];
+    const versionCounts = new Map(counts.map((c) => [c.viewId, c.count]));
+
+    return rows.map((view) => {
+      const version = view.currentVersionId ? versionsById.get(view.currentVersionId) : undefined;
+      const schema = version?.schemaJson as { widgets?: { type?: string }[] } | undefined;
+      const widgetCounts: Record<string, number> = {};
+      for (const w of schema?.widgets ?? []) {
+        if (typeof w?.type === "string") widgetCounts[w.type] = (widgetCounts[w.type] ?? 0) + 1;
+      }
+      return {
+        ...view,
+        promptText: version?.promptText ?? null,
+        widgetCounts,
+        versionCount: versionCounts.get(view.id) ?? 1,
+      };
     });
   }),
 
@@ -29,7 +66,15 @@ export const viewsRouter = router({
       });
       if (!version) throw new Error("View has no current version");
 
-      return { view, schema: version.schemaJson };
+      return {
+        view,
+        schema: version.schemaJson,
+        version: {
+          promptText: version.promptText,
+          createdBy: version.createdBy,
+          createdAt: version.createdAt,
+        },
+      };
     }),
 
   create: protectedProcedure
@@ -120,6 +165,9 @@ export const viewsRouter = router({
           createdBy: viewVersions.createdBy,
           promptText: viewVersions.promptText,
           createdAt: viewVersions.createdAt,
+          // First version of a view has no parent — lets the UI distinguish
+          // "created" from "refined" without another query.
+          parentVersionId: viewVersions.parentVersionId,
         })
         .from(viewVersions)
         .innerJoin(views, eq(views.id, viewVersions.viewId))

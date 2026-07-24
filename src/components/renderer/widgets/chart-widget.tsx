@@ -1,29 +1,16 @@
 "use client";
 
 import type { z } from "zod";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import type { chartWidgetSchema } from "@/lib/dsl/schema";
 import { useCatalogQuery } from "../use-catalog-query";
+import {
+  CartesianChartCore,
+  ChartLegend,
+  DonutChartCore,
+  type CartesianVariant,
+  type ChartSeriesDef,
+} from "@/components/charts/chart-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-const axisTick = { fill: "var(--muted-foreground)", fontSize: 12 };
-const tooltipStyle = {
-  background: "var(--popover)",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--radius)",
-  color: "var(--popover-foreground)",
-  fontSize: 12,
-};
 
 export function ChartWidget({
   widget,
@@ -34,13 +21,22 @@ export function ChartWidget({
 }) {
   const query = useCatalogQuery(widget.dataBinding, filters);
   const rows = (query.data ?? []) as Record<string, unknown>[];
-  const { xField, yField, chartType } = widget.config;
+  const { chartType, xField, yField, donut } = widget.config;
+
+  // Multi-series charts declare series explicitly; the yField shorthand
+  // (and every view saved before series existed) becomes a single series.
+  const series: ChartSeriesDef[] =
+    widget.config.series && widget.config.series.length > 0
+      ? widget.config.series
+      : [{ key: yField ?? "count", label: widget.title ?? yField ?? "Value" }];
+  const showLegend = chartType !== "donut" && series.length > 1;
 
   return (
-    <Card className="flex h-full flex-col">
-      {widget.title && (
-        <CardHeader>
-          <CardTitle className="text-sm">{widget.title}</CardTitle>
+    <Card className="flex h-full flex-col gap-3">
+      {(widget.title || showLegend) && (
+        <CardHeader className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+          {widget.title && <CardTitle className="min-w-0 text-sm">{widget.title}</CardTitle>}
+          {showLegend && <ChartLegend series={series} />}
         </CardHeader>
       )}
       <CardContent className="min-h-0 flex-1">
@@ -50,45 +46,24 @@ export function ChartWidget({
           <p className="text-muted-foreground text-sm">No data.</p>
         )}
         {query.data && rows.length > 0 && (
-          <ResponsiveContainer width="100%" height={220}>
-            {chartType === "bar" ? (
-              <BarChart data={rows} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid vertical={false} stroke="var(--border)" />
-                <XAxis
-                  dataKey={xField}
-                  tickLine={false}
-                  axisLine={{ stroke: "var(--border)" }}
-                  tick={axisTick}
-                />
-                <YAxis tickLine={false} axisLine={false} tick={axisTick} allowDecimals={false} />
-                <Tooltip
-                  cursor={{ fill: "var(--muted)" }}
-                  contentStyle={tooltipStyle}
-                  labelStyle={{ color: "var(--foreground)" }}
-                />
-                <Bar dataKey={yField} fill="var(--chart-1)" radius={[4, 4, 0, 0]} maxBarSize={24} />
-              </BarChart>
-            ) : (
-              <LineChart data={rows} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid vertical={false} stroke="var(--border)" />
-                <XAxis
-                  dataKey={xField}
-                  tickLine={false}
-                  axisLine={{ stroke: "var(--border)" }}
-                  tick={axisTick}
-                />
-                <YAxis tickLine={false} axisLine={false} tick={axisTick} allowDecimals={false} />
-                <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "var(--foreground)" }} />
-                <Line
-                  dataKey={yField}
-                  stroke="var(--chart-1)"
-                  strokeWidth={2}
-                  dot={{ r: 4, fill: "var(--chart-1)", stroke: "var(--card)", strokeWidth: 2 }}
-                  activeDot={{ r: 5 }}
-                />
-              </LineChart>
-            )}
-          </ResponsiveContainer>
+          chartType === "donut" ? (
+            donut && (
+              <DonutChartCore
+                rows={rows}
+                nameField={donut.nameField}
+                valueField={donut.valueField}
+                centerLabel={donut.centerLabel}
+                maxSlices={donut.maxSlices}
+              />
+            )
+          ) : (
+            <CartesianChartCore
+              variant={chartType as CartesianVariant}
+              xField={xField ?? ""}
+              series={series}
+              rows={rows}
+            />
+          )
         )}
       </CardContent>
     </Card>

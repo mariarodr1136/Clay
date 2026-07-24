@@ -9,6 +9,7 @@ import { ChartWidget } from "./widgets/chart-widget";
 import { FilterBarWidget } from "./widgets/filter-bar-widget";
 import { TextWidget } from "./widgets/text-widget";
 import { FormWidget } from "./widgets/form-widget";
+import { ProgressWidget } from "./widgets/progress-widget";
 import { Card, CardContent } from "@/components/ui/card";
 
 function FallbackWidget({ reason }: { reason: string }) {
@@ -44,6 +45,8 @@ function WidgetSwitch({
       return <TextWidget widget={widget} />;
     case "form":
       return <FormWidget widget={widget} />;
+    case "progress":
+      return <ProgressWidget widget={widget} filters={filters} />;
     default:
       // Exhaustiveness guard: a widget type that reaches here is one the
       // renderer's registry hasn't caught up to yet, not a crash.

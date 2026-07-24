@@ -3,8 +3,6 @@ import { eq } from "drizzle-orm";
 import { currentUser } from "@clerk/nextjs/server";
 import { db } from "@/server/db/client";
 import { users, organizations, memberships } from "@/server/db/schema";
-import { seedDemoData } from "@/server/db/seed-demo-data";
-import { seedDemoViews } from "@/server/db/seed-demo-views";
 
 export type CurrentContext = {
   userId: string;
@@ -39,7 +37,7 @@ export async function ensureUserOrg(): Promise<CurrentContext> {
     email ||
     "Unnamed";
 
-  const { organizationId, didCreate } = await db.transaction(async (tx) => {
+  const { organizationId } = await db.transaction(async (tx) => {
     await tx
       .insert(users)
       .values({ id: clerkUser.id, email, name, imageUrl: clerkUser.imageUrl })
@@ -60,22 +58,20 @@ export async function ensureUserOrg(): Promise<CurrentContext> {
 
     if (insertedMembership.length === 0) {
       // Lost a race against a concurrent first request that already
-      // provisioned this user — use their org, discard the one just created,
-      // and skip seeding (the winner already seeds it).
+      // provisioned this user — use their org and discard the one just
+      // created.
       await tx.delete(organizations).where(eq(organizations.id, org.id));
       const existing = await tx.query.memberships.findFirst({
         where: eq(memberships.userId, clerkUser.id),
       });
-      return { organizationId: existing!.organizationId, didCreate: false };
+      return { organizationId: existing!.organizationId };
     }
 
-    return { organizationId: org.id, didCreate: true };
+    // New workspaces start empty on purpose — the app's empty states walk
+    // the user into their first project/view, and "Load sample workspace"
+    // (projects.seedSample) offers the demo content as an explicit opt-in.
+    return { organizationId: org.id };
   });
-
-  if (didCreate) {
-    const project = await seedDemoData(organizationId, clerkUser.id);
-    await seedDemoViews(organizationId, clerkUser.id, project.id);
-  }
 
   return { userId: clerkUser.id, organizationId };
 }

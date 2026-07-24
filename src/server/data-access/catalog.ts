@@ -6,6 +6,10 @@ import { tasksByPriorityCount, tasksByPriorityCountParams } from "./queries/task
 import { overdueTasks, overdueTasksParams } from "./queries/overdue-tasks";
 import { completionsOverTime, completionsOverTimeParams } from "./queries/completions-over-time";
 import { tasksByAssignee, tasksByAssigneeParams } from "./queries/tasks-by-assignee";
+import { statusByProject, statusByProjectParams } from "./queries/status-by-project";
+import { upcomingTasks, upcomingTasksParams } from "./queries/upcoming-tasks";
+import { openTasksByAssignee, openTasksByAssigneeParams } from "./queries/open-tasks-by-assignee";
+import { openTasksByProject, openTasksByProjectParams } from "./queries/open-tasks-by-project";
 
 type CatalogEntry = {
   description: string;
@@ -48,6 +52,29 @@ export const queryCatalog = {
     description: "Count of tasks grouped by assignee.",
     paramsSchema: tasksByAssigneeParams,
     run: tasksByAssignee,
+  },
+  statusByProject: {
+    description:
+      "One row per project with per-status counts (todo/in_progress/in_review/done) — ideal for a stackedBar chart with xField 'project'.",
+    paramsSchema: statusByProjectParams,
+    run: statusByProject,
+  },
+  upcomingTasks: {
+    description: "Open tasks due within the next N days (default 7), soonest first.",
+    paramsSchema: upcomingTasksParams,
+    run: upcomingTasks,
+  },
+  openTasksByAssignee: {
+    description:
+      "Open tasks per assignee split by status ({ assignee, todo, in_progress, in_review, total }) — ideal for a stackedBar workload chart with xField 'assignee'.",
+    paramsSchema: openTasksByAssigneeParams,
+    run: openTasksByAssignee,
+  },
+  openTasksByProject: {
+    description:
+      "Open task count per project ({ project, count }) — where remaining work is concentrated; ideal for a donut chart.",
+    paramsSchema: openTasksByProjectParams,
+    run: openTasksByProject,
   },
 } satisfies Record<string, CatalogEntry>;
 

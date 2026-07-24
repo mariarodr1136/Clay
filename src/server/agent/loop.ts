@@ -59,11 +59,18 @@ function systemPrompt(ctx: { projectId?: string; viewId?: string; viewName?: str
 
 ${contextBlock}
 
-Widgets are declarative, never code: table, kpi, chart, filterBar, text, form, computedField. A data-bound widget's dataBinding is { queryId, params } where queryId must be one of the query catalog's ids — you never write SQL or generate arbitrary code, only select and parameterize existing safe queries. Chart widgets support chartType "bar" or "line" only.
+Widgets are declarative, never code: table, kpi, chart, filterBar, text, form, computedField, progress. A data-bound widget's dataBinding is { queryId, params } where queryId must be one of the query catalog's ids — you never write SQL or generate arbitrary code, only select and parameterize existing safe queries.
 
-Call list_query_catalog if you don't already know the exact catalog ids and their params. Use run_query to sanity-check real data when it would help you pick better widget config (e.g. confirm actual status values).
+Widget capabilities:
+- chart: chartType "bar" | "line" | "area" | "stackedBar" | "stackedArea" | "donut". Cartesian charts need xField plus either yField (single series) or a series array [{ key, label, colorVar?, dashed? }] (max 5) where each key is a numeric field on the query's rows — use series for stacked/multi-line charts, and dashed: true for reference series (planned, ideal). colorVar accepts design tokens: "--chart-1" … "--chart-5" for ordinary series (assign in that order), or the semantic status tokens "--status-todo" / "--status-in-progress" / "--status-in-review" / "--status-done" when the series ARE task statuses. Donut charts use config.donut { nameField, valueField, centerLabel? } instead of x/y.
+- kpi: a single aggregated figure (aggregate "count" | "sum" | "avg" over the rows, optional field). Optional note (short caption under the value) and intent "danger" for figures like overdue counts where non-zero is bad.
+- table: columns may carry kind "status" | "priority" | "date" | "number" to render badges, overdue-highlighted dates, and right-aligned numbers.
+- progress: labeled 0-100 meters, one per row ({ nameField, valueField }).
+- filterBar: config { filterKey, label, options }; other widgets reference the live selection with a param value of "$filter:<filterKey>" (e.g. params.projectId = "$filter:project").
 
-Keep views focused: usually 1-4 widgets, laid out on a 12-column grid (x 0-11, y from 0, w/h in grid units). Every widget id used in "widgets" must also appear in "layout.widgets".
+Call list_query_catalog if you don't already know the exact catalog ids and their params. Use run_query to sanity-check real data when it would help you pick better widget config (e.g. confirm actual status values or row field names).
+
+Layout is a 12-column grid (x 0-11, y from 0, w/h in grid units; one row unit ≈ 100px). Every widget id used in "widgets" must also appear in "layout.widgets". Match scope to the request: a quick question deserves 1-3 widgets; a dashboard request deserves a composed layout — typically a row of 3-4 KPIs (w:3, h:2), then charts (h:3, w:5-12), then a detail table. Give charts breathing room; never make a chart narrower than w:5.
 
 End by calling propose_view exactly once with your best answer — that call is what actually makes the change appear for the user, so don't stop before making it unless the request is impossible to satisfy with the available catalog (in which case explain why in text instead).`;
 }

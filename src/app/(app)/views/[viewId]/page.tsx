@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { ArrowLeft, Bot, Sparkles, UserRound } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { ViewRenderer } from "@/components/renderer/view-renderer";
 import { ViewChatPanel } from "@/components/views/view-chat-panel";
@@ -61,10 +62,31 @@ export default function ViewPage() {
           <ArrowLeft className="size-3.5" />
           Views
         </Link>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-3xl font-semibold tracking-tight">{viewQuery.data.view.name}</h1>
-            <Badge variant={isOrgScope ? "default" : "outline"}>{viewQuery.data.view.scope}</Badge>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-3xl font-semibold tracking-tight">{viewQuery.data.view.name}</h1>
+              <Badge variant={isOrgScope ? "default" : "outline"}>
+                {viewQuery.data.view.scope}
+              </Badge>
+            </div>
+            {viewQuery.data.version.promptText && (
+              <p className="text-muted-foreground flex items-center gap-1.5 text-sm italic">
+                <Sparkles className="size-3.5 shrink-0" />
+                &ldquo;{viewQuery.data.version.promptText}&rdquo;
+              </p>
+            )}
+            <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+              {viewQuery.data.version.createdBy === "agent" ? (
+                <Bot className="size-3.5" />
+              ) : (
+                <UserRound className="size-3.5" />
+              )}
+              Current version by {viewQuery.data.version.createdBy} ·{" "}
+              {formatDistanceToNow(new Date(viewQuery.data.version.createdAt), {
+                addSuffix: true,
+              })}
+            </p>
           </div>
           <Button
             size="sm"
