@@ -6,7 +6,7 @@ A project tracker where the UI isn't fixed. Describe the dashboard you need in p
 
 Instead of a fixed set of dashboards and a settings menu to configure them, Clay exposes an allow-listed catalog of queries over your data and gives an LLM tool-use loop exactly two abilities: run one of those queries, or propose a view (a small layout of widgets bound to the results). Every request that changes an existing view creates a new version rather than overwriting it, so nothing you or the agent builds is ever lost.
 
-**Try it live:** run locally and open `/demo` for a read-only preview with sample data — no account required.
+**Live Demo:** https://clay-gray.vercel.app
 
 ---
 
