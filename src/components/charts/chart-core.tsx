@@ -16,6 +16,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useChartsAnimate } from "./static-charts";
 
 // Presentation-only chart building blocks shared by the live ViewRenderer
 // widgets and the /demo fixtures renderer — both feed rows in; neither owns
@@ -131,6 +132,7 @@ export function CartesianChartCore({
 }) {
   const gradientBase = useId().replace(/:/g, "");
   const lastStackedIndex = series.length - 1;
+  const animate = useChartsAnimate();
   const singleSeriesBar = variant === "bar" && series.length === 1 && rows.length <= 8;
 
   return (
@@ -166,7 +168,14 @@ export function CartesianChartCore({
           const color = seriesColor(s);
           if (variant === "bar") {
             return (
-              <Bar key={s.key} dataKey={s.key} fill={color} radius={[4, 4, 0, 0]} maxBarSize={22}>
+              <Bar
+                key={s.key}
+                dataKey={s.key}
+                fill={color}
+                radius={[4, 4, 0, 0]}
+                maxBarSize={22}
+                isAnimationActive={animate}
+              >
                 {singleSeriesBar && (
                   <LabelList
                     dataKey={s.key}
@@ -188,6 +197,7 @@ export function CartesianChartCore({
                 strokeWidth={1}
                 maxBarSize={22}
                 radius={i === lastStackedIndex ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                isAnimationActive={animate}
               />
             );
           }
@@ -201,6 +211,7 @@ export function CartesianChartCore({
                 strokeWidth={2}
                 fill={`url(#${gradientBase}-${i})`}
                 activeDot={{ r: 4, fill: color, stroke: "var(--card)", strokeWidth: 2 }}
+                isAnimationActive={animate}
               />
             );
           }
@@ -214,6 +225,7 @@ export function CartesianChartCore({
                 strokeWidth={2}
                 fill={`url(#${gradientBase}-${i})`}
                 activeDot={{ r: 4, fill: color, stroke: "var(--card)", strokeWidth: 2 }}
+                isAnimationActive={animate}
               />
             );
           }
@@ -227,6 +239,7 @@ export function CartesianChartCore({
               strokeLinecap="round"
               dot={false}
               activeDot={{ r: 4, fill: color, stroke: "var(--card)", strokeWidth: 2 }}
+              isAnimationActive={animate}
             />
           );
         })}

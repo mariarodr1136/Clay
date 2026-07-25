@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import { ArrowLeft, History, Sparkles } from "lucide-react";
 import { auditActionMeta, demoAuditLog, demoViewById } from "@/fixtures/demo-dashboards";
@@ -9,12 +10,15 @@ import { DemoViewRenderer } from "@/components/demo/demo-view-renderer";
 import { DemoActionButton } from "@/components/demo/demo-action-button";
 import { DemoRefinePanel } from "@/components/demo/demo-refine-panel";
 import { DemoAvatar } from "@/components/demo/demo-avatar";
+import { ExportMenu } from "@/components/views/export-menu";
+import { PrintTimestamp } from "@/components/views/print-timestamp";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function DemoViewPage() {
   const params = useParams<{ viewId: string }>();
   const view = demoViewById(params.viewId);
+  const [filters, setFilters] = useState<Record<string, string>>({});
 
   if (!view) {
     return (
@@ -58,23 +62,39 @@ export default function DemoViewPage() {
               Created by {creator.name} · updated {view.updatedLabel}
             </p>
           </div>
-          <DemoActionButton
-            size="sm"
-            variant="outline"
-            message={
-              view.scope === "org"
-                ? "Sign up to manage published views."
-                : "Sign up to publish views to your org."
-            }
-          >
-            {view.scope === "org" ? "Manage sharing" : "Publish to org"}
-          </DemoActionButton>
+          <div className="print-hidden flex items-center gap-2">
+            {/* Exports are real here, not a sign-up prompt: the demo's
+                fixtures are public sample data, so the same endpoint and the
+                same workbook writer can serve them. */}
+            <ExportMenu
+              exportPath={`/api/demo/views/${view.id}/export`}
+              tables={view.widgets
+                .filter((w) => w.type === "table")
+                .map((w) => ({ id: w.id, title: w.title ?? w.id }))}
+              filters={filters}
+            />
+            <DemoActionButton
+              size="sm"
+              variant="outline"
+              message={
+                view.scope === "org"
+                  ? "Sign up to manage published views."
+                  : "Sign up to publish views to your org."
+              }
+            >
+              {view.scope === "org" ? "Manage sharing" : "Publish to org"}
+            </DemoActionButton>
+          </div>
         </div>
       </div>
 
-      <DemoViewRenderer view={view} />
+      <p className="print-only text-muted-foreground text-xs">
+        Exported from Clay · sample data · <PrintTimestamp filters={filters} />
+      </p>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <DemoViewRenderer view={view} onFiltersChange={setFilters} />
+
+      <div className="print-hidden grid gap-4 lg:grid-cols-2">
         <DemoRefinePanel />
         <Card className="gap-3">
           <CardHeader>

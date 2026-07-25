@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { toast } from "sonner";
@@ -9,13 +10,30 @@ import { trpc } from "@/lib/trpc/client";
 import { ViewRenderer } from "@/components/renderer/view-renderer";
 import { ViewChatPanel } from "@/components/views/view-chat-panel";
 import { VersionHistory } from "@/components/views/version-history";
+import { ExportMenu, type ExportableTable } from "@/components/views/export-menu";
+import { PrintTimestamp } from "@/components/views/print-timestamp";
+import { parseView } from "@/lib/dsl/validate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+
+// Only tables get a per-widget CSV: a chart or KPI's underlying rows are
+// already a sheet in the workbook, and offering them individually would turn
+// a short menu into a long one.
+function exportableTables(schema: unknown): ExportableTable[] {
+  const parsed = parseView(schema);
+  if (!parsed.success) return [];
+  return parsed.data.widgets
+    .filter((w) => w.type === "table")
+    .map((w) => ({ id: w.id, title: w.title ?? w.id }));
+}
 
 export default function ViewPage() {
   const params = useParams<{ viewId: string }>();
   const viewQuery = trpc.views.get.useQuery({ id: params.viewId });
   const utils = trpc.useUtils();
+  // Mirrors the renderer's filter bar so exports (and the printed header) can
+  // say what the numbers on screen are actually filtered to.
+  const [filters, setFilters] = useState<Record<string, string>>({});
 
   const refresh = () => {
     utils.views.get.invalidate({ id: params.viewId });
@@ -88,22 +106,34 @@ export default function ViewPage() {
               })}
             </p>
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={publish.isPending || unpublish.isPending}
-            onClick={() =>
-              isOrgScope
-                ? unpublish.mutate({ viewId: params.viewId })
-                : publish.mutate({ viewId: params.viewId })
-            }
-          >
-            {isOrgScope ? "Unpublish" : "Publish to org"}
-          </Button>
+          <div className="print-hidden flex items-center gap-2">
+            <ExportMenu
+              exportPath={`/api/views/${params.viewId}/export`}
+              tables={exportableTables(viewQuery.data.schema)}
+              filters={filters}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={publish.isPending || unpublish.isPending}
+              onClick={() =>
+                isOrgScope
+                  ? unpublish.mutate({ viewId: params.viewId })
+                  : publish.mutate({ viewId: params.viewId })
+              }
+            >
+              {isOrgScope ? "Unpublish" : "Publish to org"}
+            </Button>
+          </div>
         </div>
       </div>
-      <ViewRenderer schema={viewQuery.data.schema} />
-      <div className="grid gap-4 sm:grid-cols-2">
+      {/* Provenance the screen already shows in the header — repeated here so
+          a printed or PDF'd copy carries it too. */}
+      <p className="print-only text-muted-foreground text-xs">
+        Exported from Clay · <PrintTimestamp filters={filters} />
+      </p>
+      <ViewRenderer schema={viewQuery.data.schema} onFiltersChange={setFilters} />
+      <div className="print-hidden grid gap-4 sm:grid-cols-2">
         <ViewChatPanel viewId={params.viewId} onUpdated={refresh} />
         <VersionHistory viewId={params.viewId} onReverted={refresh} />
       </div>

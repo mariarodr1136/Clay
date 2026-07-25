@@ -92,47 +92,107 @@
   --priority-urgent: oklch(0.55 0.22 25);
 }
 
-.dark {
-  --background: oklch(0.16 0.006 264);
-  --foreground: oklch(0.94 0.004 264);
-  --card: oklch(0.205 0.006 264);
-  --card-foreground: oklch(0.94 0.004 264);
-  --popover: oklch(0.205 0.006 264);
-  --popover-foreground: oklch(0.94 0.004 264);
-  --primary: oklch(0.72 0.15 264);
-  --primary-foreground: oklch(0.16 0.02 264);
-  --secondary: oklch(0.269 0.006 264);
-  --secondary-foreground: oklch(0.94 0.004 264);
-  --muted: oklch(0.24 0.006 264);
-  --muted-foreground: oklch(0.66 0.012 264);
-  --accent: oklch(0.28 0.05 264);
-  --accent-foreground: oklch(0.88 0.04 264);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.72 0.15 264 / 50%);
-  --chart-1: #3987e5;
-  --chart-2: #d95926;
-  --chart-3: #199e70;
-  --chart-4: #c98500;
-  --chart-5: #d55181;
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+/* Scoped to screen so print falls back to :root's light palette. A printed
+   dashboard should be ink on white — dark tokens waste toner, and browsers
+   drop backgrounds from print by default anyway, which would leave pale text
+   on nothing. Doing it with a media query keeps one copy of each value. */
+@media screen {
+  .dark {
+    --background: oklch(0.16 0.006 264);
+    --foreground: oklch(0.94 0.004 264);
+    --card: oklch(0.205 0.006 264);
+    --card-foreground: oklch(0.94 0.004 264);
+    --popover: oklch(0.205 0.006 264);
+    --popover-foreground: oklch(0.94 0.004 264);
+    --primary: oklch(0.72 0.15 264);
+    --primary-foreground: oklch(0.16 0.02 264);
+    --secondary: oklch(0.269 0.006 264);
+    --secondary-foreground: oklch(0.94 0.004 264);
+    --muted: oklch(0.24 0.006 264);
+    --muted-foreground: oklch(0.66 0.012 264);
+    --accent: oklch(0.28 0.05 264);
+    --accent-foreground: oklch(0.88 0.04 264);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.72 0.15 264 / 50%);
+    --chart-1: #3987e5;
+    --chart-2: #d95926;
+    --chart-3: #199e70;
+    --chart-4: #c98500;
+    --chart-5: #d55181;
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.556 0 0);
 
-  --status-todo: oklch(0.7 0.012 264);
-  --status-in-progress: oklch(0.72 0.15 255);
-  --status-in-review: oklch(0.72 0.16 310);
-  --status-done: oklch(0.72 0.13 155);
-  --priority-low: oklch(0.7 0.012 264);
-  --priority-medium: oklch(0.72 0.13 240);
-  --priority-high: oklch(0.76 0.15 55);
-  --priority-urgent: oklch(0.7 0.19 25);
+    --status-todo: oklch(0.7 0.012 264);
+    --status-in-progress: oklch(0.72 0.15 255);
+    --status-in-review: oklch(0.72 0.16 310);
+    --status-done: oklch(0.72 0.13 155);
+    --priority-low: oklch(0.7 0.012 264);
+    --priority-medium: oklch(0.72 0.13 240);
+    --priority-high: oklch(0.76 0.15 55);
+    --priority-urgent: oklch(0.7 0.19 25);
+  }
+}
+
+@media screen {
+  .print-only {
+    display: none;
+  }
+}
+
+/* Print is the PDF path: every browser's print dialog can "Save as PDF", and
+   because the widgets are real SVG/text, the result stays vector-sharp. No
+   headless browser, no rasterized screenshot. */
+@media print {
+  @page {
+    /* Dashboards are laid out on a 12-column grid — portrait crushes them. */
+    size: landscape;
+    margin: 14mm;
+  }
+
+  .print-hidden {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #fff;
+  }
+
+  /* Chart series, badges, and KPI colors carry meaning here, so opt out of
+     the browser's default "strip backgrounds when printing". */
+  * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Reclaim the page: the app's reading-width container and vertical rhythm
+     are screen affordances that just cost paper. */
+  main {
+    padding: 0 !important;
+  }
+
+  main > div {
+    max-width: none !important;
+  }
+
+  /* Widgets are self-contained cards; splitting one across a page break makes
+     both halves unreadable. */
+  [data-slot="card"] {
+    break-inside: avoid;
+    /* Cards are outlined with `ring-1`, which Tailwind implements as a
+       box-shadow — so dropping shadows for print would erase their edges
+       and leave widgets floating. Swap in a real border instead. */
+    box-shadow: none !important;
+    border: 1px solid var(--border);
+  }
 }
 
 @layer base {

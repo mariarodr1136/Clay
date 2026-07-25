@@ -2,6 +2,7 @@ import { z } from "zod";
 import { and, desc, eq, ne, type SQL } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { tasks, taskStatuses, taskPriorities } from "@/server/db/schema";
+import { DEFAULT_ROW_LIMIT, EXPORT_ROW_LIMIT } from "../limits";
 
 export const tasksListParams = z.object({
   projectId: z.string().uuid().optional(),
@@ -9,7 +10,9 @@ export const tasksListParams = z.object({
   priority: z.enum(taskPriorities).optional(),
   // true = exclude done tasks ("open work" lists).
   open: z.boolean().optional(),
-  limit: z.number().int().min(1).max(200).default(50),
+  // The ceiling here is the export ceiling; interactive callers never get
+  // near it because runCatalogQuery clamps them to INTERACTIVE_ROW_LIMIT.
+  limit: z.number().int().min(1).max(EXPORT_ROW_LIMIT).default(DEFAULT_ROW_LIMIT),
 });
 
 export async function tasksList(organizationId: string, params: z.infer<typeof tasksListParams>) {

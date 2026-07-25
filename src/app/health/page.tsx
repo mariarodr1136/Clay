@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { sql } from "drizzle-orm";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { db } from "@/server/db/client";
@@ -5,6 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 async function checkDb() {
+  // Without this, the page prerenders at build time and every later request
+  // is served a health check frozen at whenever the build ran. connection()
+  // stops prerendering here so the query runs per request — and unlike the
+  // `dynamic` segment config, it keeps working if Cache Components is
+  // enabled later.
+  await connection();
   try {
     const result = await db.execute(sql`select now() as now, current_database() as db`);
     const row = result[0] as { now: string; db: string };

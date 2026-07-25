@@ -57,8 +57,20 @@ function WidgetSwitch({
 // Re-validates at render time (defense in depth against a stale/bad
 // version) and fails closed to a fallback widget rather than throwing —
 // one bad widget never takes down the rest of the view.
-export function ViewRenderer({ schema }: { schema: unknown }) {
-  const [filters, setFilters] = useState<Record<string, string>>({});
+export function ViewRenderer({
+  schema,
+  // Filter state stays owned here, but export needs to know what's currently
+  // applied so a downloaded file matches the screen it came from.
+  onFiltersChange,
+  // Lets the print page open already filtered, so a PDF reflects the filter
+  // bar as the user left it.
+  initialFilters = {},
+}: {
+  schema: unknown;
+  onFiltersChange?: (filters: Record<string, string>) => void;
+  initialFilters?: Record<string, string>;
+}) {
+  const [filters, setFilters] = useState<Record<string, string>>(initialFilters);
   const parsed = parseView(schema);
 
   if (!parsed.success) {
@@ -69,14 +81,11 @@ export function ViewRenderer({ schema }: { schema: unknown }) {
   const layoutById = new Map(layout.widgets.map((l) => [l.id, l]));
 
   const handleFilterChange = (key: string, value: string) => {
-    setFilters((prev) => {
-      if (!value) {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      }
-      return { ...prev, [key]: value };
-    });
+    const next = { ...filters };
+    if (value) next[key] = value;
+    else delete next[key];
+    setFilters(next);
+    onFiltersChange?.(next);
   };
 
   return (
