@@ -43,19 +43,28 @@ function WidgetSwitch({
 // Same 12-column grid contract as the live ViewRenderer, but rendering the
 // richer demo widget set against static fixtures via runDemoQuery — no auth,
 // no DB, matching the rest of /demo.
-export function DemoViewRenderer({ view }: { view: DemoViewDef }) {
-  const [filters, setFilters] = useState<Record<string, string>>({});
+export function DemoViewRenderer({
+  view,
+  // Mirrors the live ViewRenderer: export needs to know what's currently
+  // filtered so a downloaded file matches the screen it came from.
+  onFiltersChange,
+  // Lets the print page open already filtered, so a PDF reflects the filter
+  // bar as the user left it.
+  initialFilters = {},
+}: {
+  view: DemoViewDef;
+  onFiltersChange?: (filters: Record<string, string>) => void;
+  initialFilters?: Record<string, string>;
+}) {
+  const [filters, setFilters] = useState<Record<string, string>>(initialFilters);
   const layoutById = new Map(view.layout.map((l) => [l.id, l]));
 
   const handleFilterChange = (key: string, value: string) => {
-    setFilters((prev) => {
-      if (!value) {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      }
-      return { ...prev, [key]: value };
-    });
+    const next = { ...filters };
+    if (value) next[key] = value;
+    else delete next[key];
+    setFilters(next);
+    onFiltersChange?.(next);
   };
 
   return (

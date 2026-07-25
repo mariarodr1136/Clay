@@ -1,4 +1,5 @@
 import type { taskPriorities, taskStatuses } from "@/server/db/schema";
+import { resolveBindingParams } from "@/lib/dsl/resolve-params";
 
 // Static, DB-free fixture set backing every /demo/* route: a six-project
 // portfolio with a full team, ~50 tasks, and pre-computed trend series, so
@@ -308,25 +309,6 @@ export const launchReadiness = [
 // Query catalog (in-memory stand-in for runCatalogQuery)
 // ---------------------------------------------------------------------------
 
-const filterRefPattern = /^\$filter:(.+)$/;
-
-// Mirrors use-catalog-query.ts's resolveParams: a "$filter:x" param value is
-// a live reference to the view's filterBar state, resolved at query time.
-function resolveParams(params: Record<string, unknown>, filters: Record<string, string>) {
-  const resolved: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(params)) {
-    if (typeof value === "string") {
-      const match = value.match(filterRefPattern);
-      if (match) {
-        const filterValue = filters[match[1]];
-        if (filterValue) resolved[key] = filterValue;
-        continue;
-      }
-    }
-    resolved[key] = value;
-  }
-  return resolved;
-}
 
 function enrichTask(t: DemoTask) {
   const project = demoProjectById(t.projectId);
@@ -361,7 +343,7 @@ export function runDemoQuery(
   rawParams: Record<string, unknown> = {},
   filters: Record<string, string> = {}
 ): Record<string, unknown>[] {
-  const params = resolveParams(rawParams, filters);
+  const params = resolveBindingParams(rawParams, filters);
   const limit = (params.limit as number | undefined) ?? 100;
 
   switch (queryId) {

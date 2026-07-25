@@ -1,33 +1,44 @@
 "use client";
 
 import { trpc } from "@/lib/trpc/client";
+import { resolveBindingParams } from "@/lib/dsl/resolve-params";
+import { stableQueryKey } from "@/lib/dsl/query-key";
 import type { DataBinding } from "@/lib/dsl/schema";
+import { usePreloadedQueries } from "./preloaded-data";
 
-const filterRefPattern = /^\$filter:(.+)$/;
+export type CatalogQueryResult = {
+  data: Record<string, unknown>[] | undefined;
+  isLoading: boolean;
+  error: { message: string } | null;
+};
 
-// A dataBinding param value of "$filter:status" is a live reference to the
-// view's filterBar state, resolved here at query time. Unset filters simply
-// omit the param, which every catalog query treats as "no filter."
-function resolveParams(
-  params: Record<string, string | number | boolean | null>,
+export function useCatalogQuery(
+  dataBinding: DataBinding,
   filters: Record<string, string>
-) {
-  const resolved: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(params)) {
-    if (typeof value === "string") {
-      const match = value.match(filterRefPattern);
-      if (match) {
-        const filterValue = filters[match[1]];
-        if (filterValue) resolved[key] = filterValue;
-        continue;
-      }
-    }
-    resolved[key] = value;
-  }
-  return resolved;
-}
+): CatalogQueryResult {
+  const preloaded = usePreloadedQueries();
+  const params = resolveBindingParams(dataBinding.params, filters);
 
-export function useCatalogQuery(dataBinding: DataBinding, filters: Record<string, string>) {
-  const params = resolveParams(dataBinding.params, filters);
-  return trpc.views.runQuery.useQuery({ queryId: dataBinding.queryId, params });
+  // Hooks can't be skipped, so the query is always declared and simply
+  // disabled when rows were preloaded server-side (the print/PDF path).
+  const query = trpc.views.runQuery.useQuery(
+    { queryId: dataBinding.queryId, params },
+    { enabled: preloaded === null }
+  );
+
+  if (preloaded) {
+    return {
+      data: preloaded[stableQueryKey(dataBinding.queryId, params)] ?? [],
+      isLoading: false,
+      error: null,
+    };
+  }
+
+  return {
+    // Catalog queries always resolve to row arrays; the widgets narrow
+    // further from here.
+    data: query.data as Record<string, unknown>[] | undefined,
+    isLoading: query.isLoading,
+    error: query.error ? { message: query.error.message } : null,
+  };
 }
