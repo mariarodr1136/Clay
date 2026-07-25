@@ -1,6 +1,6 @@
 # Clay
 
-![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6) ![Next.js](https://img.shields.io/badge/Next.js_16-App_Router-000000) ![React](https://img.shields.io/badge/React_19-Frontend-61DAFB) ![tRPC](https://img.shields.io/badge/tRPC-11-2596BE) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Drizzle_ORM-4169E1) ![Claude](https://img.shields.io/badge/Claude-Agent_Loop-D97757) ![Vitest](https://img.shields.io/badge/Vitest-14_tests-6E9F18) ![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000)
+![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6) ![Next.js](https://img.shields.io/badge/Next.js_16-App_Router-000000) ![React](https://img.shields.io/badge/React_19-Frontend-61DAFB) ![tRPC](https://img.shields.io/badge/tRPC-11-2596BE) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Drizzle_ORM-4169E1) ![Claude](https://img.shields.io/badge/Claude-Agent_Loop-D97757) ![Vitest](https://img.shields.io/badge/Vitest-49_tests-6E9F18) ![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000)
 
 A project tracker where the UI isn't fixed. Describe the dashboard you need in plain language, and an agent built on the Claude API writes it — live, against your real projects and tasks, in seconds.
 
@@ -73,6 +73,7 @@ Instead of a fixed set of dashboards and a settings menu to configure them, Clay
 | **Backend** | tRPC 11, Drizzle ORM, PostgreSQL, Next.js Route Handlers |
 | **Auth** | Clerk (organizations provisioned automatically on first sign-in) |
 | **AI** | Anthropic Claude via `@anthropic-ai/sdk`, a bounded tool-use loop (max 6 rounds) over a fixed tool set |
+| **Exports** | `write-excel-file` for XLSX, hand-rolled RFC 4180 CSV, headless Chrome (`puppeteer-core` + `@sparticuz/chromium`) for PDF |
 | **Quality** | Vitest (unit + adversarial security tests), ESLint 9 + typescript-eslint |
 
 ---
@@ -103,13 +104,18 @@ npm run db:push
 npm run dev
 ```
 
-The app runs at http://localhost:3000. Sign up to get an empty personal workspace with a guided start — create your first project, or load a sample workspace (a seeded project plus generated views) with one click. Or visit `/demo` for a read-only, fully loaded showcase with no account: a six-project portfolio, eight example dashboards, scripted agent conversations, and an audit trail.
+The app runs at http://localhost:3000. Sign up to get an empty personal workspace with a guided start — create your first project, or load a sample workspace (a seeded project plus generated views) with one click. Or visit `/demo` for a read-only, fully loaded showcase with no account: a six-project portfolio, eight example dashboards, scripted agent conversations, and an audit trail. Exports work there for real — open any demo view and download the workbook, a CSV, or the PDF.
 
 To use the "ask your interface into existence" chat, paste your own Anthropic API key into the chat panel — it's sent per-request and never stored server-side.
 
 ### Deployment
 
 The live demo runs on [Vercel](https://vercel.com), with Postgres on [Neon](https://neon.tech) and a dedicated Clerk instance for public sign-ups. To deploy your own copy: import the repo into Vercel, add a Postgres database (the Neon integration under the project's Storage tab wires up `DATABASE_URL` automatically), set `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`, and push the schema with `npm run db:push` against that database before the first deploy.
+
+Two notes on PDF export specifically:
+
+- `PDF_SIGNING_SECRET` is optional — it falls back to `CLERK_SECRET_KEY`, so there's nothing extra to configure.
+- The PDF renderer loads one of the app's own pages, which means it makes a request back to its own deployment. If Vercel **Deployment Protection** is enabled for an environment (it is by default on preview deployments), that request is blocked and PDF export fails there with a `502` explaining why. XLSX and CSV are unaffected. `@sparticuz/chromium` also adds roughly 50 MB to the function, so the first PDF after an idle period is slower than subsequent ones.
 
 ### Development Workflow
 
@@ -141,17 +147,21 @@ Clay/
 │   │   │   ├── chat/                 # "Ask for a view" chat (BYOK Anthropic key)
 │   │   │   ├── views/[viewId]/       # A generated view + its version history
 │   │   │   └── audit/                # Org-wide activity log
+│   │   ├── print/                    # Chrome-less print pages the PDF renderer captures (token-gated for live views)
 │   │   └── api/
 │   │       ├── agent/route.ts        # Runs the Claude tool-use loop for a request
+│   │       ├── views/[viewId]/export/    # XLSX / CSV / PDF for a live view
+│   │       ├── demo/views/[viewId]/export/  # The same, over the demo fixtures
 │   │       └── trpc/[trpc]/          # tRPC route handler
 │   ├── components/                   # UI primitives (shadcn/Radix), shared chart core, agent + view components
 │   ├── fixtures/                     # Static demo data + sample-workspace view fixtures
-│   ├── lib/                          # tRPC client, view DSL (Zod), task display metadata
+│   ├── lib/                          # tRPC client, view DSL (Zod), filter/query-key helpers, task display metadata
 │   └── server/
 │       ├── agent/                    # Tool-use loop, tool executor, rate limiter, tools/
 │       ├── auth/                     # ensureUserOrg — provisions an empty org on first sign-in
 │       ├── data-access/              # The query catalog — the agent's only read path
 │       ├── db/                       # Drizzle schema, client, opt-in sample-workspace seed
+│       ├── export/                   # Dataset planner, CSV/XLSX writers, PDF renderer, print tokens
 │       └── trpc/                     # Routers: projects, tasks, views
 └── src/test/                         # Vitest setup helpers
 ```
@@ -183,6 +193,8 @@ A request either targets a project (building a new view) or an existing view (re
 - **The agent can never escalate a view to organization-wide scope**, on create or on patch — that requires an explicit user action.
 - **Cross-organization writes are rejected**, even when a caller presents a real version id that belongs to a different organization.
 - **Per-user rate limiting** (10 requests / 5 minutes) sits in front of every Anthropic call.
+- **Exports use the same choke point as the UI.** A download re-runs the view's bindings through the query catalog server-side rather than serializing rows the client holds, so there's one authorization path rather than two — and CSV values that a spreadsheet would evaluate as formulas are neutralized on the way out.
+- **PDF rendering doesn't weaken auth.** The headless browser has no session; the export route — which has already authenticated the caller — signs a 60-second HMAC token naming one view, one organization, and one filter set. The print page authorizes on that alone and scopes every query to the organization inside it, so a missing, tampered, expired, or wrong-secret token renders nothing.
 
 These invariants are covered by a dedicated adversarial test suite (`src/server/agent/security.test.ts`) in addition to the unit tests.
 
