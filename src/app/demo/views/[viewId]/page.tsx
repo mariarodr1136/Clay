@@ -3,11 +3,19 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, History, Sparkles } from "lucide-react";
-import { auditActionMeta, demoAuditLog, demoViewById } from "@/fixtures/demo-dashboards";
+import { toast } from "sonner";
+import { ArrowLeft, History, LayoutTemplate, Link2, Sparkles } from "lucide-react";
+import {
+  auditActionMeta,
+  demoAuditLog,
+  demoViewById,
+  type DemoLayoutItem,
+} from "@/fixtures/demo-dashboards";
 import { demoPerson } from "@/fixtures/demo-data";
 import { DemoViewRenderer } from "@/components/demo/demo-view-renderer";
+import { DemoLayoutEditor } from "@/components/demo/demo-layout-editor";
 import { DemoActionButton } from "@/components/demo/demo-action-button";
+import { Button } from "@/components/ui/button";
 import { DemoRefinePanel } from "@/components/demo/demo-refine-panel";
 import { DemoAvatar } from "@/components/demo/demo-avatar";
 import { ExportMenu } from "@/components/views/export-menu";
@@ -19,6 +27,10 @@ export default function DemoViewPage() {
   const params = useParams<{ viewId: string }>();
   const view = demoViewById(params.viewId);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [editingLayout, setEditingLayout] = useState(false);
+  // Tab-local stand-in for a saved layout version — the demo fixtures are
+  // shared, so a visitor's rearrangement never persists anywhere.
+  const [layoutOverride, setLayoutOverride] = useState<DemoLayoutItem[] | null>(null);
 
   if (!view) {
     return (
@@ -63,6 +75,27 @@ export default function DemoViewPage() {
             </p>
           </div>
           <div className="print-hidden flex items-center gap-2">
+            <Button
+              size="sm"
+              variant={editingLayout ? "default" : "outline"}
+              onClick={() => setEditingLayout((v) => !v)}
+            >
+              <LayoutTemplate className="size-3.5" />
+              {editingLayout ? "Editing layout" : "Edit layout"}
+            </Button>
+            {/* Live views mint a revocable token for this; the demo is
+                already public, so its own URL is the share link. */}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                await navigator.clipboard.writeText(window.location.href);
+                toast.success("Demo views are already public — link copied.");
+              }}
+            >
+              <Link2 className="size-3.5" />
+              Share
+            </Button>
             {/* Exports are real here, not a sign-up prompt: the demo's
                 fixtures are public sample data, so the same endpoint and the
                 same workbook writer can serve them. */}
@@ -92,7 +125,22 @@ export default function DemoViewPage() {
         Exported from Clay · sample data · <PrintTimestamp filters={filters} />
       </p>
 
-      <DemoViewRenderer view={view} onFiltersChange={setFilters} />
+      {editingLayout ? (
+        <DemoLayoutEditor
+          view={view}
+          layout={layoutOverride ?? view.layout}
+          onSave={(layout) => {
+            setLayoutOverride(layout);
+            setEditingLayout(false);
+          }}
+          onCancel={() => setEditingLayout(false)}
+        />
+      ) : (
+        <DemoViewRenderer
+          view={layoutOverride ? { ...view, layout: layoutOverride } : view}
+          onFiltersChange={setFilters}
+        />
+      )}
 
       <div className="print-hidden grid gap-4 lg:grid-cols-2">
         <DemoRefinePanel />
@@ -131,6 +179,15 @@ export default function DemoViewPage() {
                       )}
                       {entry.detail && (
                         <p className="text-muted-foreground text-xs">{entry.detail}</p>
+                      )}
+                      {entry.diff && (
+                        <ul className="mt-1 space-y-0.5">
+                          {entry.diff.map((line, i) => (
+                            <li key={i} className="text-muted-foreground font-mono text-xs">
+                              {line}
+                            </li>
+                          ))}
+                        </ul>
                       )}
                     </div>
                   </li>

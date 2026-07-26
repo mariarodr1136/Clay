@@ -54,7 +54,16 @@ export type DemoWidget =
         donut?: { nameField: string; valueField: string; centerLabel: string; maxSlices?: number };
       };
     }
-  | { id: string; type: "table"; title?: string; query: DemoQueryBinding; config: { columns: DemoColumn[] } }
+  | {
+      id: string;
+      type: "table";
+      title?: string;
+      query: DemoQueryBinding;
+      // statusActions mirrors the live DSL flag: status cells render as
+      // dropdowns. Demo data is read-only, so changing one explains itself
+      // with a toast instead of writing.
+      config: { columns: DemoColumn[]; statusActions?: boolean };
+    }
   | {
       id: string;
       type: "filterBar";
@@ -383,6 +392,7 @@ export const demoViewDefs: DemoViewDef[] = [
           params: { projectId: "$filter:project", open: true, limit: 50 },
         },
         config: {
+          statusActions: true,
           columns: [
             { key: "title", label: "Task" },
             { key: "project", label: "Project" },

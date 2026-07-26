@@ -13,6 +13,17 @@ function applyEvent(prev: TranscriptItem[], event: AgentEvent): TranscriptItem[]
   switch (event.type) {
     case "text":
       return [...prev, { kind: "text", text: event.text }];
+    // Streaming text: text_start opens a fresh entry, each delta appends to
+    // it — so two separate text blocks in one turn stay two entries.
+    case "text_start":
+      return [...prev, { kind: "text", text: "" }];
+    case "text_delta": {
+      const last = prev[prev.length - 1];
+      if (!last || last.kind !== "text") {
+        return [...prev, { kind: "text", text: event.text }];
+      }
+      return [...prev.slice(0, -1), { kind: "text", text: last.text + event.text }];
+    }
     case "tool_call":
       return [...prev, { kind: "status", text: `Calling ${event.name}…`, ok: true }];
     case "tool_result":
@@ -34,7 +45,7 @@ export function useAgentStream() {
   const [isRunning, setIsRunning] = useState(false);
 
   async function send(
-    body: { message: string; projectId?: string; viewId?: string },
+    body: { message: string; projectId?: string; viewId?: string; model?: string },
     apiKey: string
   ): Promise<string | null> {
     setIsRunning(true);

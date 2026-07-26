@@ -2,8 +2,9 @@ import { z } from "zod";
 import { and, asc, eq } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { db } from "@/server/db/client";
-import { tasks, activityLog, taskStatuses, taskPriorities } from "@/server/db/schema";
+import { tasks, taskStatuses, taskPriorities } from "@/server/db/schema";
 import { runCatalogQuery } from "@/server/data-access/catalog";
+import { runCatalogMutation } from "@/server/data-access/mutations";
 
 export const tasksRouter = router({
   listByProject: protectedProcedure
@@ -41,54 +42,24 @@ export const tasksRouter = router({
         description: z.string().max(4000).optional(),
         priority: z.enum(taskPriorities).default("medium"),
         dueDate: z.string().date().optional(),
+        points: z.number().int().min(0).max(100).default(0),
       })
     )
+    // Routed through the mutation catalog — the same allow-listed,
+    // org-scoped write path that mutation-bound widgets use, so there's one
+    // choke point on the write side just as runCatalogQuery is on the read
+    // side.
     .mutation(async ({ ctx, input }) => {
-      const [task] = await db
-        .insert(tasks)
-        .values({
-          organizationId: ctx.organizationId,
-          projectId: input.projectId,
-          title: input.title,
-          description: input.description,
-          priority: input.priority,
-          dueDate: input.dueDate,
-          createdBy: ctx.userId,
-        })
-        .returning();
-
-      await db.insert(activityLog).values({
-        organizationId: ctx.organizationId,
-        actorId: ctx.userId,
-        verb: "task.created",
-        entityType: "task",
-        entityId: task.id,
-        metadata: { title: task.title },
-      });
-
-      return task;
+      return runCatalogMutation(ctx.organizationId, ctx.userId, "createTask", input);
     }),
 
   updateStatus: protectedProcedure
     .input(z.object({ id: z.string().uuid(), status: z.enum(taskStatuses) }))
     .mutation(async ({ ctx, input }) => {
-      const [task] = await db
-        .update(tasks)
-        .set({ status: input.status, updatedAt: new Date() })
-        .where(and(eq(tasks.id, input.id), eq(tasks.organizationId, ctx.organizationId)))
-        .returning();
-      if (!task) throw new Error("Task not found");
-
-      await db.insert(activityLog).values({
-        organizationId: ctx.organizationId,
-        actorId: ctx.userId,
-        verb: "task.status_changed",
-        entityType: "task",
-        entityId: task.id,
-        metadata: { status: input.status },
+      return runCatalogMutation(ctx.organizationId, ctx.userId, "updateTaskStatus", {
+        taskId: input.id,
+        status: input.status,
       });
-
-      return task;
     }),
 
   update: protectedProcedure
@@ -99,6 +70,7 @@ export const tasksRouter = router({
         description: z.string().max(4000).nullable().optional(),
         priority: z.enum(taskPriorities).optional(),
         dueDate: z.string().date().nullable().optional(),
+        points: z.number().int().min(0).max(100).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {

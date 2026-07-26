@@ -6,8 +6,9 @@ import { toast } from "sonner";
 import { ArrowUpRight, FolderKanban, KeyRound, MessageSquareText } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { useAgentStream } from "@/lib/use-agent-stream";
-import { useByokKey } from "@/lib/use-byok-key";
+import { useByokKey, useByokModel } from "@/lib/use-byok-key";
 import { TranscriptList } from "@/components/agent/transcript-list";
+import { ModelPicker } from "@/components/agent/model-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,9 +25,10 @@ import {
 const promptIdeas = [
   "Build a delivery dashboard: KPIs for open and overdue work, a stacked bar of task status by project, and a table of what's due this week",
   "Which tasks are overdue, who owns them, and how bad is it?",
-  "Show completions over the last 30 days as an area chart",
-  "Give me a filterable view of open work by assignee, broken down by status",
-  "Where is the remaining work concentrated? Show it as a donut by project",
+  "Show our velocity by week and cycle time trend side by side",
+  "Chart tasks created vs completed per day — are we keeping up?",
+  "Give me a triage board of overdue work where I can change statuses inline",
+  "Where is the remaining effort concentrated? Show story points as a donut by project",
 ];
 
 export default function ChatPage() {
@@ -35,6 +37,7 @@ export default function ChatPage() {
 
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [apiKey, setApiKey] = useByokKey();
+  const [model, setModel] = useByokModel();
   const [message, setMessage] = useState("");
   const { transcript, isRunning, send } = useAgentStream();
 
@@ -55,7 +58,7 @@ export default function ChatPage() {
     }
     if (!message.trim()) return;
 
-    await send({ message: message.trim(), projectId }, apiKey.trim());
+    await send({ message: message.trim(), projectId, model }, apiKey.trim());
     viewsQuery.refetch();
   }
 
@@ -102,12 +105,15 @@ export default function ChatPage() {
               per-request, never stored on our server.
             </p>
 
-            <Input
-              type="password"
-              placeholder="sk-ant-..."
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-            />
+            <div className="flex gap-2">
+              <Input
+                type="password"
+                placeholder="sk-ant-..."
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+              />
+              <ModelPicker value={model} onChange={setModel} className="w-44 shrink-0" />
+            </div>
 
             {projectsQuery.data && projectsQuery.data.length > 1 && (
               <Select value={projectId} onValueChange={setSelectedProjectId}>

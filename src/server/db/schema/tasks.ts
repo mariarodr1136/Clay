@@ -25,6 +25,9 @@ export const tasks = pgTable("tasks", {
   priority: text("priority", { enum: taskPriorities }).notNull().default("medium"),
   assigneeId: text("assignee_id").references(() => users.id, { onDelete: "set null" }),
   dueDate: date("due_date"),
+  // Story points. 0 means "unestimated" — velocity/effort queries sum this,
+  // so an unestimated task simply contributes nothing rather than skewing.
+  points: integer("points").notNull().default(0),
   orderIndex: integer("order_index").notNull().default(0),
   createdBy: text("created_by")
     .notNull()

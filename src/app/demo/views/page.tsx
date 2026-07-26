@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   AlignLeft,
   BarChart3,
+  BookmarkPlus,
   Gauge,
   ListChecks,
   SlidersHorizontal,
@@ -11,6 +12,7 @@ import {
 import { demoViewDefs, type DemoWidget } from "@/fixtures/demo-dashboards";
 import { demoPerson } from "@/fixtures/demo-data";
 import { DemoAvatar } from "@/components/demo/demo-avatar";
+import { DemoActionButton } from "@/components/demo/demo-action-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -104,6 +106,24 @@ export default function DemoViewsPage() {
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {personalViews.map(renderCard)}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+          Templates
+        </h2>
+        <div className="border-border flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-dashed px-6 py-5">
+          <div className="flex items-start gap-3">
+            <BookmarkPlus className="text-muted-foreground mt-0.5 size-4 shrink-0" />
+            <p className="text-muted-foreground max-w-xl text-sm leading-relaxed">
+              In the live app, any view saves as a reusable template — stamp out the same
+              dashboard for a new project in one click.
+            </p>
+          </div>
+          <DemoActionButton size="sm" variant="outline" message="Sign up to save and reuse view templates.">
+            Save a view as a template
+          </DemoActionButton>
         </div>
       </section>
     </>

@@ -22,7 +22,9 @@ function FallbackWidget({ reason }: { reason: string }) {
   );
 }
 
-function WidgetSwitch({
+// Exported for the layout editor, which renders the same widgets but owns
+// its own grid geometry.
+export function WidgetSwitch({
   widget,
   filters,
   onFilterChange,

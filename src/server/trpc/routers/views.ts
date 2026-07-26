@@ -1,10 +1,12 @@
+import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { db } from "@/server/db/client";
-import { views, viewVersions } from "@/server/db/schema";
-import { viewSchema } from "@/lib/dsl/schema";
+import { views, viewVersions, viewTemplates } from "@/server/db/schema";
+import { layoutItemSchema, viewSchema } from "@/lib/dsl/schema";
 import { runCatalogQuery } from "@/server/data-access/catalog";
+import { runCatalogMutation } from "@/server/data-access/mutations";
 import { createView, patchView } from "@/server/db/create-view";
 import type { ViewInput } from "@/lib/dsl/schema";
 
@@ -98,6 +100,18 @@ export const viewsRouter = router({
       return runCatalogQuery(ctx.organizationId, input.queryId, input.params);
     }),
 
+  // The write-side twin of runQuery: mutation-bound widgets (task forms,
+  // status dropdowns on table rows) land here. mutationId/params are
+  // validated against the mutation catalog's own schemas; organizationId and
+  // the acting user come only from the session. The agent never reaches this
+  // — it has no tool for it — a widget it configured still executes under
+  // the clicking user's authority, not the agent's.
+  runMutation: protectedProcedure
+    .input(z.object({ mutationId: z.string(), params: z.record(z.string(), z.unknown()).default({}) }))
+    .mutation(async ({ ctx, input }) => {
+      return runCatalogMutation(ctx.organizationId, ctx.userId, input.mutationId, input.params);
+    }),
+
   listVersions: protectedProcedure
     .input(z.object({ viewId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
@@ -109,6 +123,44 @@ export const viewsRouter = router({
       return db.query.viewVersions.findMany({
         where: eq(viewVersions.viewId, input.viewId),
         orderBy: desc(viewVersions.createdAt),
+      });
+    }),
+
+  // Manual drag/resize edits from the layout editor. Only geometry can
+  // change here — widgets and bindings are carried over from the current
+  // version verbatim — and the result is a normal new version row, so a
+  // hand-tuned layout sits in the same history as agent edits and reverts.
+  saveLayout: protectedProcedure
+    .input(
+      z.object({
+        viewId: z.string().uuid(),
+        layout: z.object({ widgets: z.array(layoutItemSchema).max(24) }),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const view = await db.query.views.findFirst({
+        where: and(eq(views.id, input.viewId), eq(views.organizationId, ctx.organizationId)),
+      });
+      if (!view?.currentVersionId) throw new Error("View not found");
+
+      const current = await db.query.viewVersions.findFirst({
+        where: eq(viewVersions.id, view.currentVersionId),
+      });
+      if (!current) throw new Error("View has no current version");
+
+      // Re-validated through the full view schema so a layout that orphans
+      // or invents a widget id is rejected exactly like a bad agent proposal.
+      const schema = viewSchema.parse({
+        ...(current.schemaJson as Record<string, unknown>),
+        layout: input.layout,
+      });
+
+      return patchView({
+        organizationId: ctx.organizationId,
+        viewId: input.viewId,
+        schema,
+        createdBy: "user",
+        promptText: "Manually adjusted the layout",
       });
     }),
 
@@ -186,5 +238,103 @@ export const viewsRouter = router({
         .returning();
       if (!updated) throw new Error("View not found");
       return updated;
+    }),
+
+  // Public read-only share links. The token is the whole capability: 192
+  // random bits, shown at /share/<token>, revoked by nulling it. Turning
+  // sharing on when it's already on keeps the existing token so a copied
+  // link isn't silently invalidated.
+  setSharing: protectedProcedure
+    .input(z.object({ viewId: z.string().uuid(), enabled: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const view = await db.query.views.findFirst({
+        where: and(eq(views.id, input.viewId), eq(views.organizationId, ctx.organizationId)),
+      });
+      if (!view) throw new Error("View not found");
+
+      const shareToken = input.enabled
+        ? (view.shareToken ?? randomBytes(24).toString("base64url"))
+        : null;
+
+      const [updated] = await db
+        .update(views)
+        .set({ shareToken })
+        .where(and(eq(views.id, input.viewId), eq(views.organizationId, ctx.organizationId)))
+        .returning();
+      return { shareToken: updated.shareToken };
+    }),
+
+  // Templates: a named copy of a view's current schema, reusable as the
+  // starting point for new views. The copy is taken server-side from the
+  // view's own current version — a client can't smuggle in a schema the
+  // view never had.
+  saveAsTemplate: protectedProcedure
+    .input(z.object({ viewId: z.string().uuid(), name: z.string().min(1).max(200).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const view = await db.query.views.findFirst({
+        where: and(eq(views.id, input.viewId), eq(views.organizationId, ctx.organizationId)),
+      });
+      if (!view?.currentVersionId) throw new Error("View not found");
+
+      const version = await db.query.viewVersions.findFirst({
+        where: eq(viewVersions.id, view.currentVersionId),
+      });
+      if (!version) throw new Error("View has no current version");
+
+      const [template] = await db
+        .insert(viewTemplates)
+        .values({
+          organizationId: ctx.organizationId,
+          name: input.name ?? view.name,
+          schemaJson: version.schemaJson,
+          createdBy: ctx.userId,
+        })
+        .returning();
+      return template;
+    }),
+
+  listTemplates: protectedProcedure.query(async ({ ctx }) => {
+    return db.query.viewTemplates.findMany({
+      where: eq(viewTemplates.organizationId, ctx.organizationId),
+      orderBy: desc(viewTemplates.createdAt),
+    });
+  }),
+
+  createFromTemplate: protectedProcedure
+    .input(z.object({ templateId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const template = await db.query.viewTemplates.findFirst({
+        where: and(
+          eq(viewTemplates.id, input.templateId),
+          eq(viewTemplates.organizationId, ctx.organizationId)
+        ),
+      });
+      if (!template) throw new Error("Template not found");
+
+      // Re-validated through the DSL on the way out of storage, and always
+      // born personal — instantiating a template is not a publish.
+      const schema = viewSchema.parse(template.schemaJson);
+      return createView({
+        organizationId: ctx.organizationId,
+        ownerId: ctx.userId,
+        name: template.name,
+        schema: { ...schema, scope: "personal" },
+        createdBy: "user",
+        promptText: `Created from template "${template.name}"`,
+      });
+    }),
+
+  deleteTemplate: protectedProcedure
+    .input(z.object({ templateId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await db
+        .delete(viewTemplates)
+        .where(
+          and(
+            eq(viewTemplates.id, input.templateId),
+            eq(viewTemplates.organizationId, ctx.organizationId)
+          )
+        );
+      return { id: input.templateId };
     }),
 });

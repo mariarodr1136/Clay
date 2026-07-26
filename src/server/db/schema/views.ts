@@ -18,6 +18,9 @@ export const views = pgTable("views", {
     .references(() => users.id),
   scope: text("scope", { enum: viewScopes }).notNull().default("personal"),
   name: text("name").notNull(),
+  // Set = a public, read-only share link exists for this view (the token IS
+  // the capability; unguessable, revocable by nulling). Null = not shared.
+  shareToken: text("share_token").unique(),
   currentVersionId: uuid("current_version_id").references((): AnyPgColumn => viewVersions.id),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
