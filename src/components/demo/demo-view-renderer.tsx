@@ -9,7 +9,9 @@ import { DemoProgressWidget } from "./widgets/demo-progress-widget";
 import { FilterBarWidget } from "@/components/renderer/widgets/filter-bar-widget";
 import { Card, CardContent } from "@/components/ui/card";
 
-function WidgetSwitch({
+// Exported for the demo layout editor, which renders the same widgets but
+// owns its own grid geometry.
+export function DemoWidgetSwitch({
   widget,
   filters,
   onFilterChange,
@@ -84,7 +86,7 @@ export function DemoViewRenderer({
               gridRow: `${layoutItem.y + 1} / span ${layoutItem.h}`,
             }}
           >
-            <WidgetSwitch widget={widget} filters={filters} onFilterChange={handleFilterChange} />
+            <DemoWidgetSwitch widget={widget} filters={filters} onFilterChange={handleFilterChange} />
           </div>
         );
       })}

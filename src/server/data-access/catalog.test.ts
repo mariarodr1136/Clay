@@ -59,6 +59,7 @@ describe("query catalog cross-org isolation", () => {
         dueDate: daysFromNow(-3),
         assigneeId: userA.id,
         createdBy: userA.id,
+        points: 3,
       },
       {
         organizationId: orgA.id,
@@ -68,6 +69,7 @@ describe("query catalog cross-org isolation", () => {
         priority: "medium",
         assigneeId: userA.id,
         createdBy: userA.id,
+        points: 5,
       },
       {
         organizationId: orgB.id,
@@ -87,6 +89,7 @@ describe("query catalog cross-org isolation", () => {
         priority: "low",
         assigneeId: userB.id,
         createdBy: userB.id,
+        points: 8,
       },
     ]);
   });
@@ -140,6 +143,68 @@ describe("query catalog cross-org isolation", () => {
       count: number;
     }[];
     expect(result).toEqual([{ assigneeId: userA.id, count: 2 }]);
+  });
+
+  it("velocityByWeek sums only org A's completed points", async () => {
+    const result = (await runCatalogQuery(orgA.id, "velocityByWeek", {})) as {
+      week: string;
+      points: number;
+      tasks: number;
+    }[];
+    expect(result.reduce((s, r) => s + r.points, 0)).toBe(5);
+    expect(result.reduce((s, r) => s + r.tasks, 0)).toBe(1);
+  });
+
+  it("pointsByProject reflects only org A's open points", async () => {
+    const result = (await runCatalogQuery(orgA.id, "pointsByProject", {})) as {
+      project: string;
+      points: number;
+    }[];
+    expect(result).toEqual([{ project: "Project A", points: 3 }]);
+  });
+
+  it("agingWip returns every bucket zero-filled and only counts org A's open tasks", async () => {
+    const result = (await runCatalogQuery(orgA.id, "agingWip", {})) as {
+      bucket: string;
+      count: number;
+    }[];
+    expect(result.map((r) => r.bucket)).toEqual([
+      "0-3 days",
+      "4-7 days",
+      "8-14 days",
+      "15-30 days",
+      "30+ days",
+    ]);
+    // Org A has exactly one open task, created just now.
+    expect(result.reduce((s, r) => s + r.count, 0)).toBe(1);
+    expect(result[0].count).toBe(1);
+  });
+
+  it("agingWip scoped to org B's projectId from org A returns all-zero buckets", async () => {
+    const result = (await runCatalogQuery(orgA.id, "agingWip", { projectId: projectB.id })) as {
+      count: number;
+    }[];
+    expect(result.reduce((s, r) => s + r.count, 0)).toBe(0);
+  });
+
+  it("createdVsCompleted merges both series per day for org A only", async () => {
+    const result = (await runCatalogQuery(orgA.id, "createdVsCompleted", { days: 7 })) as {
+      day: string;
+      created: number;
+      completed: number;
+    }[];
+    expect(result.length).toBe(1);
+    expect(result[0].created).toBe(2);
+    expect(result[0].completed).toBe(1);
+  });
+
+  it("cycleTimeByWeek only reflects org A's completed tasks", async () => {
+    const result = (await runCatalogQuery(orgA.id, "cycleTimeByWeek", {})) as {
+      week: string;
+      avgDays: number;
+      tasks: number;
+    }[];
+    expect(result.reduce((s, r) => s + r.tasks, 0)).toBe(1);
   });
 
   it("rejects an unknown query id", async () => {

@@ -297,6 +297,20 @@ export const cycleTimeByWeek = [
 
 export const completedByWeekSpark = velocityByWeek.map((w) => ({ x: w.week, y: w.completed }));
 
+// Inflow vs outflow, matching the live createdVsCompleted catalog query's
+// { day, created, completed } shape.
+export const createdVsCompletedByDay = [
+  { day: "Jul 14", created: 6, completed: 4 },
+  { day: "Jul 15", created: 3, completed: 5 },
+  { day: "Jul 16", created: 5, completed: 7 },
+  { day: "Jul 17", created: 4, completed: 3 },
+  { day: "Jul 18", created: 7, completed: 6 },
+  { day: "Jul 21", created: 2, completed: 8 },
+  { day: "Jul 22", created: 5, completed: 6 },
+  { day: "Jul 23", created: 4, completed: 7 },
+  { day: "Jul 24", created: 3, completed: 5 },
+];
+
 export const launchReadiness = [
   { workstream: "Billing & invoicing", percent: 92 },
   { workstream: "SSO & provisioning", percent: 100 },
@@ -427,6 +441,26 @@ export function runDemoQuery(
 
     case "velocityByWeek":
       return velocityByWeek;
+
+    case "createdVsCompleted":
+      return createdVsCompletedByDay;
+
+    // Live agingWip buckets by createdAt, which demo tasks don't carry —
+    // derive a stable stand-in from due-date offsets so the same view schema
+    // renders in both worlds.
+    case "agingWip": {
+      const open = filterTasks(params).filter((t) => t.status !== "done");
+      const buckets = ["0-3 days", "4-7 days", "8-14 days", "15-30 days", "30+ days"];
+      const counts = new Map<string, number>(buckets.map((b) => [b, 0]));
+      const today = todayIso();
+      for (const t of open) {
+        const age = Math.abs(Math.round((Date.parse(today) - Date.parse(t.dueDate)) / 86_400_000));
+        const bucket =
+          age <= 3 ? buckets[0] : age <= 7 ? buckets[1] : age <= 14 ? buckets[2] : age <= 30 ? buckets[3] : buckets[4];
+        counts.set(bucket, (counts.get(bucket) ?? 0) + 1);
+      }
+      return buckets.map((bucket) => ({ bucket, count: counts.get(bucket) ?? 0 }));
+    }
 
     case "burndownByDay":
       return burndownByDay;

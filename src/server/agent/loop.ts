@@ -7,8 +7,8 @@ import {
   proposeViewInputSchema,
 } from "./tools/schemas";
 import { executeTool } from "./execute-tool";
+import { DEFAULT_AGENT_MODEL, type AgentModelId } from "@/lib/agent-models";
 
-const MODEL = "claude-sonnet-5";
 const MAX_ROUNDS = 6;
 const MAX_TOKENS = 4096;
 
@@ -45,8 +45,12 @@ const tools: Anthropic.Tool[] = [
   {
     name: "propose_view",
     description:
-      "Create a new view (a small dashboard of widgets bound to catalog queries) for the user. This is how you answer their request — call it exactly once, as your final action.",
+      "Create a new view (a small dashboard of widgets bound to catalog queries) for the user. This is how you build or change a view — call it at most once, as your final action.",
     input_schema: toToolSchema(proposeViewInputSchema),
+    // The tool set is static across rounds and requests, so a cache
+    // breakpoint on the last tool means every follow-up round (and every
+    // later request from the same key) pays for the tool schemas once.
+    cache_control: { type: "ephemeral" },
   },
 ];
 
@@ -64,7 +68,7 @@ Widgets are declarative, never code: table, kpi, chart, filterBar, text, form, c
 Widget capabilities:
 - chart: chartType "bar" | "line" | "area" | "stackedBar" | "stackedArea" | "donut". Cartesian charts need xField plus either yField (single series) or a series array [{ key, label, colorVar?, dashed? }] (max 5) where each key is a numeric field on the query's rows — use series for stacked/multi-line charts, and dashed: true for reference series (planned, ideal). colorVar accepts design tokens: "--chart-1" … "--chart-5" for ordinary series (assign in that order), or the semantic status tokens "--status-todo" / "--status-in-progress" / "--status-in-review" / "--status-done" when the series ARE task statuses. Donut charts use config.donut { nameField, valueField, centerLabel? } instead of x/y.
 - kpi: a single aggregated figure (aggregate "count" | "sum" | "avg" over the rows, optional field). Optional note (short caption under the value) and intent "danger" for figures like overdue counts where non-zero is bad.
-- table: columns may carry kind "status" | "priority" | "date" | "number" to render badges, overdue-highlighted dates, and right-aligned numbers.
+- table: columns may carry kind "status" | "priority" | "date" | "number" to render badges, overdue-highlighted dates, and right-aligned numbers. When the user wants to act from the view (a triage board, "let me update these here"), set config.statusActions: true on a table bound to a row-level task query (tasksList, overdueTasks, upcomingTasks) and include a status column — each row's status becomes a live dropdown. The mutation runs only when the signed-in user clicks, through the org-scoped mutation catalog; you cannot trigger it yourself.
 - progress: labeled 0-100 meters, one per row ({ nameField, valueField }).
 - filterBar: config { filterKey, label, options }; other widgets reference the live selection with a param value of "$filter:<filterKey>" (e.g. params.projectId = "$filter:project").
 
@@ -72,11 +76,17 @@ Call list_query_catalog if you don't already know the exact catalog ids and thei
 
 Layout is a 12-column grid (x 0-11, y from 0, w/h in grid units; one row unit ≈ 100px). Every widget id used in "widgets" must also appear in "layout.widgets". Match scope to the request: a quick question deserves 1-3 widgets; a dashboard request deserves a composed layout — typically a row of 3-4 KPIs (w:3, h:2), then charts (h:3, w:5-12), then a detail table. Give charts breathing room; never make a chart narrower than w:5.
 
-End by calling propose_view exactly once with your best answer — that call is what actually makes the change appear for the user, so don't stop before making it unless the request is impossible to satisfy with the available catalog (in which case explain why in text instead).`;
+Two kinds of request, two endings:
+- If the user wants a view built or changed, end by calling propose_view exactly once with your best answer — that call is what actually makes the change appear for the user, so don't stop before making it unless the request is impossible to satisfy with the available catalog (in which case explain why in text instead).
+- If the user is asking a question about their data ("which project is most behind?", "who has the most overdue work?") rather than asking for a dashboard, don't force a view on them: use run_query to get the real numbers, then answer directly in text, citing the figures you found. Offer to build a view of it only if that would genuinely help.`;
 }
 
 export type AgentEvent =
   | { type: "text"; text: string }
+  // Streamed fragment of the current text block — the client appends these
+  // to the entry a preceding "text_start" opened.
+  | { type: "text_start" }
+  | { type: "text_delta"; text: string }
   | { type: "tool_call"; name: string; input: unknown }
   | { type: "tool_result"; name: string; ok: boolean; summary: string }
   | { type: "view_created"; viewId: string; name: string }
@@ -91,6 +101,7 @@ export async function runAgentLoop(params: {
   viewId?: string;
   viewName?: string;
   message: string;
+  model?: AgentModelId;
   emit: (event: AgentEvent) => void;
 }) {
   const { apiKey, organizationId, userId, projectId, viewId, viewName, message, emit } = params;
@@ -100,23 +111,36 @@ export async function runAgentLoop(params: {
 
   try {
     for (let round = 0; round < MAX_ROUNDS; round++) {
-      const response = await client.messages.create({
-        model: MODEL,
+      const stream = client.messages.stream({
+        model: params.model ?? DEFAULT_AGENT_MODEL,
         max_tokens: MAX_TOKENS,
-        system: systemPrompt({ projectId, viewId, viewName }),
+        // As with the tools' breakpoint: the system prompt is identical
+        // across rounds, so later rounds read it from cache.
+        system: [
+          {
+            type: "text",
+            text: systemPrompt({ projectId, viewId, viewName }),
+            cache_control: { type: "ephemeral" },
+          },
+        ],
         tools,
         messages,
       });
 
+      stream.on("streamEvent", (event) => {
+        if (event.type === "content_block_start" && event.content_block.type === "text") {
+          emit({ type: "text_start" });
+        }
+      });
+      stream.on("text", (delta) => {
+        emit({ type: "text_delta", text: delta });
+      });
+
+      const response = await stream.finalMessage();
+
       const toolUseBlocks = response.content.filter(
         (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
       );
-
-      for (const block of response.content) {
-        if (block.type === "text" && block.text.trim()) {
-          emit({ type: "text", text: block.text });
-        }
-      }
 
       messages.push({ role: "assistant", content: response.content });
 

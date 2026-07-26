@@ -5,11 +5,13 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { ArrowLeft, Bot, Sparkles, UserRound } from "lucide-react";
+import { ArrowLeft, BookmarkPlus, Bot, LayoutTemplate, Sparkles, UserRound } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { ViewRenderer } from "@/components/renderer/view-renderer";
 import { ViewChatPanel } from "@/components/views/view-chat-panel";
+import { ViewLayoutEditor } from "@/components/views/view-layout-editor";
 import { VersionHistory } from "@/components/views/version-history";
+import { ShareDialog } from "@/components/views/share-dialog";
 import { ExportMenu, type ExportableTable } from "@/components/views/export-menu";
 import { PrintTimestamp } from "@/components/views/print-timestamp";
 import { parseView } from "@/lib/dsl/validate";
@@ -34,6 +36,7 @@ export default function ViewPage() {
   // Mirrors the renderer's filter bar so exports (and the printed header) can
   // say what the numbers on screen are actually filtered to.
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [editingLayout, setEditingLayout] = useState(false);
 
   const refresh = () => {
     utils.views.get.invalidate({ id: params.viewId });
@@ -53,6 +56,11 @@ export default function ViewPage() {
       toast.success("Unpublished — back to personal");
       refresh();
     },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const saveTemplate = trpc.views.saveAsTemplate.useMutation({
+    onSuccess: (template) => toast.success(`Saved template "${template.name}"`),
     onError: (err) => toast.error(err.message),
   });
 
@@ -107,11 +115,34 @@ export default function ViewPage() {
             </p>
           </div>
           <div className="print-hidden flex items-center gap-2">
+            <Button
+              size="sm"
+              variant={editingLayout ? "default" : "outline"}
+              onClick={() => setEditingLayout((v) => !v)}
+            >
+              <LayoutTemplate className="size-3.5" />
+              {editingLayout ? "Editing layout" : "Edit layout"}
+            </Button>
             <ExportMenu
               exportPath={`/api/views/${params.viewId}/export`}
               tables={exportableTables(viewQuery.data.schema)}
               filters={filters}
             />
+            <ShareDialog
+              viewId={params.viewId}
+              shareToken={viewQuery.data.view.shareToken}
+              onChanged={refresh}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              title="Save this view as a reusable template"
+              disabled={saveTemplate.isPending}
+              onClick={() => saveTemplate.mutate({ viewId: params.viewId })}
+            >
+              <BookmarkPlus className="size-3.5" />
+              <span className="hidden sm:inline">Save as template</span>
+            </Button>
             <Button
               size="sm"
               variant="outline"
@@ -132,7 +163,18 @@ export default function ViewPage() {
       <p className="print-only text-muted-foreground text-xs">
         Exported from Clay · <PrintTimestamp filters={filters} />
       </p>
-      <ViewRenderer schema={viewQuery.data.schema} onFiltersChange={setFilters} />
+      {editingLayout ? (
+        <ViewLayoutEditor
+          viewId={params.viewId}
+          schema={viewQuery.data.schema}
+          onDone={() => {
+            setEditingLayout(false);
+            refresh();
+          }}
+        />
+      ) : (
+        <ViewRenderer schema={viewQuery.data.schema} onFiltersChange={setFilters} />
+      )}
       <div className="print-hidden grid gap-4 sm:grid-cols-2">
         <ViewChatPanel viewId={params.viewId} onUpdated={refresh} />
         <VersionHistory viewId={params.viewId} onReverted={refresh} />

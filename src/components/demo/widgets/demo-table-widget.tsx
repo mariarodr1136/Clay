@@ -1,12 +1,19 @@
 "use client";
 
+import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import type { DemoColumn, DemoWidget } from "@/fixtures/demo-dashboards";
 import { demoPerson, runDemoQuery, todayIso } from "@/fixtures/demo-data";
 import { StatusBadge, PriorityBadge } from "@/components/task-badges";
 import { DemoAvatar } from "@/components/demo/demo-avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { taskPriorities, taskStatuses } from "@/server/db/schema";
+import { taskStatuses, type taskPriorities } from "@/server/db/schema";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -28,12 +35,51 @@ function DateCell({ row, value }: { row: Record<string, unknown>; value: string 
   );
 }
 
-function CellValue({ column, row }: { column: DemoColumn; row: Record<string, unknown> }) {
+// Mirrors the live table's statusActions dropdown so the demo shows the
+// affordance — demo fixtures are read-only, so a change explains itself.
+function DemoStatusActionCell({ status }: { status: (typeof taskStatuses)[number] }) {
+  return (
+    <Select
+      value={status}
+      onValueChange={() =>
+        toast.info("Demo data is read-only — sign up to update tasks from a view.")
+      }
+    >
+      <SelectTrigger
+        size="sm"
+        className="hover:bg-muted h-7 gap-1 border-transparent bg-transparent px-1.5"
+        aria-label="Change status"
+      >
+        <StatusBadge status={status} />
+      </SelectTrigger>
+      <SelectContent>
+        {taskStatuses.map((s) => (
+          <SelectItem key={s} value={s}>
+            <StatusBadge status={s} />
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function CellValue({
+  column,
+  row,
+  statusActions,
+}: {
+  column: DemoColumn;
+  row: Record<string, unknown>;
+  statusActions?: boolean;
+}) {
   const raw = row[column.key];
   if (raw == null || raw === "") return <span className="text-muted-foreground">—</span>;
 
   switch (column.kind) {
     case "status":
+      if (statusActions) {
+        return <DemoStatusActionCell status={raw as (typeof taskStatuses)[number]} />;
+      }
       return <StatusBadge status={raw as (typeof taskStatuses)[number]} />;
     case "priority":
       return <PriorityBadge priority={raw as (typeof taskPriorities)[number]} />;
@@ -109,7 +155,7 @@ export function DemoTableWidget({
                 <TableRow key={String(row.id ?? i)}>
                   {widget.config.columns.map((c) => (
                     <TableCell key={c.key} className={c.kind === "number" ? "text-right" : undefined}>
-                      <CellValue column={c} row={row} />
+                      <CellValue column={c} row={row} statusActions={widget.config.statusActions} />
                     </TableCell>
                   ))}
                 </TableRow>

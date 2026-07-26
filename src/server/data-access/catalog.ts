@@ -10,6 +10,11 @@ import { statusByProject, statusByProjectParams } from "./queries/status-by-proj
 import { upcomingTasks, upcomingTasksParams } from "./queries/upcoming-tasks";
 import { openTasksByAssignee, openTasksByAssigneeParams } from "./queries/open-tasks-by-assignee";
 import { openTasksByProject, openTasksByProjectParams } from "./queries/open-tasks-by-project";
+import { velocityByWeek, velocityByWeekParams } from "./queries/velocity-by-week";
+import { createdVsCompleted, createdVsCompletedParams } from "./queries/created-vs-completed";
+import { cycleTimeByWeek, cycleTimeByWeekParams } from "./queries/cycle-time-by-week";
+import { agingWip, agingWipParams } from "./queries/aging-wip";
+import { pointsByProject, pointsByProjectParams } from "./queries/points-by-project";
 import { EXPORT_ROW_LIMIT, INTERACTIVE_ROW_LIMIT } from "./limits";
 
 type CatalogEntry = {
@@ -83,6 +88,36 @@ export const queryCatalog = {
       "Open task count per project ({ project, count }) — where remaining work is concentrated; ideal for a donut chart.",
     paramsSchema: openTasksByProjectParams,
     run: openTasksByProject,
+  },
+  velocityByWeek: {
+    description:
+      "Story points and task count completed per week ({ week, points, tasks }) over the last N weeks (default 8) — the velocity trend; ideal for a line or bar chart with xField 'week'.",
+    paramsSchema: velocityByWeekParams,
+    run: velocityByWeek,
+  },
+  createdVsCompleted: {
+    description:
+      "Tasks created vs completed per day ({ day, created, completed }) over the last N days (default 30) — inflow vs outflow; ideal for a two-series line/area chart with xField 'day'.",
+    paramsSchema: createdVsCompletedParams,
+    run: createdVsCompleted,
+  },
+  cycleTimeByWeek: {
+    description:
+      "Average days from task creation to completion, per week completed ({ week, avgDays, tasks }) over the last N weeks (default 8) — the cycle-time trend; ideal for a line chart with xField 'week', yField 'avgDays'.",
+    paramsSchema: cycleTimeByWeekParams,
+    run: cycleTimeByWeek,
+  },
+  agingWip: {
+    description:
+      "Open tasks bucketed by age ({ bucket, count }: 0-3, 4-7, 8-14, 15-30, 30+ days) — stale work at a glance; ideal for a bar chart with xField 'bucket'.",
+    paramsSchema: agingWipParams,
+    run: agingWip,
+  },
+  pointsByProject: {
+    description:
+      "Open story points per project ({ project, points }) — where remaining effort is concentrated; ideal for a donut chart.",
+    paramsSchema: pointsByProjectParams,
+    run: pointsByProject,
   },
 } satisfies Record<string, CatalogEntry>;
 

@@ -54,6 +54,7 @@ const createTaskSchema = z.object({
   description: z.string().max(4000).optional(),
   priority: z.enum(taskPriorities),
   dueDate: z.string().optional(),
+  points: z.number().int().min(0).max(100).optional(),
 });
 
 function DueCell({ dueDate, status }: { dueDate: string | null; status: string }) {
@@ -108,7 +109,7 @@ export default function ProjectPage() {
 
   const form = useForm<z.infer<typeof createTaskSchema>>({
     resolver: zodResolver(createTaskSchema),
-    defaultValues: { title: "", description: "", priority: "medium", dueDate: "" },
+    defaultValues: { title: "", description: "", priority: "medium", dueDate: "", points: 0 },
   });
 
   return (
@@ -141,6 +142,7 @@ export default function ProjectPage() {
                     description: values.description || undefined,
                     priority: values.priority,
                     dueDate: values.dueDate || undefined,
+                    points: values.points ?? 0,
                   })
                 )}
               >
@@ -194,19 +196,44 @@ export default function ProjectPage() {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="dueDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Due date</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="dueDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Due date</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="points"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Points</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            {...field}
+                            onChange={(e) =>
+                              field.onChange(
+                                Number.isNaN(e.target.valueAsNumber) ? 0 : e.target.valueAsNumber
+                              )
+                            }
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 <DialogFooter>
                   <Button type="submit" disabled={createTask.isPending}>
                     {createTask.isPending ? "Creating…" : "Create task"}
@@ -269,6 +296,7 @@ export default function ProjectPage() {
                 <TableHead>Status</TableHead>
                 <TableHead>Priority</TableHead>
                 <TableHead>Due</TableHead>
+                <TableHead className="text-right">Pts</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
@@ -306,6 +334,9 @@ export default function ProjectPage() {
                   </TableCell>
                   <TableCell>
                     <DueCell dueDate={task.dueDate} status={task.status} />
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-right text-sm tabular-nums">
+                    {task.points > 0 ? task.points : "—"}
                   </TableCell>
                   <TableCell>
                     <Button

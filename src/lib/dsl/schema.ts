@@ -48,6 +48,11 @@ export const tableWidgetSchema = z.object({
       )
       .min(1)
       .max(10),
+    // Status columns become live dropdowns backed by the mutation catalog's
+    // updateTaskStatus. The agent may set this flag, but the mutation only
+    // ever fires when a signed-in user clicks — under that user's session,
+    // through the same org-scoped choke point as every other write.
+    statusActions: z.boolean().optional(),
   }),
 });
 

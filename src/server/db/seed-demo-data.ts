@@ -29,6 +29,7 @@ export async function seedDemoData(organizationId: string, userId: string) {
       priority: "medium" as const,
       dueDate: daysFromNow(-6),
       orderIndex: 0,
+      points: 3,
     },
     {
       title: "Design new pricing page",
@@ -37,6 +38,7 @@ export async function seedDemoData(organizationId: string, userId: string) {
       priority: "high" as const,
       dueDate: daysFromNow(-1),
       orderIndex: 1,
+      points: 5,
     },
     {
       title: "Migrate blog to new CMS",
@@ -45,6 +47,7 @@ export async function seedDemoData(organizationId: string, userId: string) {
       priority: "medium" as const,
       dueDate: daysFromNow(4),
       orderIndex: 2,
+      points: 8,
     },
     {
       title: "Set up staging environment",
@@ -53,6 +56,7 @@ export async function seedDemoData(organizationId: string, userId: string) {
       priority: "urgent" as const,
       dueDate: daysFromNow(2),
       orderIndex: 3,
+      points: 3,
     },
     {
       title: "Write launch announcement",
@@ -61,6 +65,7 @@ export async function seedDemoData(organizationId: string, userId: string) {
       priority: "low" as const,
       dueDate: daysFromNow(10),
       orderIndex: 4,
+      points: 2,
     },
     {
       title: "QA pass on mobile breakpoints",
@@ -69,6 +74,7 @@ export async function seedDemoData(organizationId: string, userId: string) {
       priority: "high" as const,
       dueDate: daysFromNow(7),
       orderIndex: 5,
+      points: 3,
     },
     {
       title: "Fix broken redirects from old URLs",
@@ -77,6 +83,7 @@ export async function seedDemoData(organizationId: string, userId: string) {
       priority: "urgent" as const,
       dueDate: daysFromNow(-2),
       orderIndex: 6,
+      points: 2,
     },
   ];
 

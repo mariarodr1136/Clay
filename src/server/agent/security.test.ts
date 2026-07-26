@@ -5,6 +5,7 @@ import { organizations, users, projects, views } from "@/server/db/schema";
 import { createView, patchView } from "@/server/db/create-view";
 import { proposeViewTool } from "./tools/propose-view";
 import { proposeViewInputSchema } from "./tools/schemas";
+import { executeTool } from "./execute-tool";
 
 // Adversarial tests for the invariants the plan's Security Model relies on:
 // unknown widget types and catalog ids get rejected, the agent can never
@@ -145,6 +146,20 @@ describe("agent security invariants", () => {
         createdBy: "agent",
       })
     ).rejects.toThrow("View not found");
+  });
+
+  it("exposes no tool that reaches the mutation catalog", async () => {
+    // The agent may configure mutation-bound widgets, but must never be able
+    // to execute a write itself — there is simply no such tool.
+    for (const name of ["run_mutation", "runMutation", "create_task", "update_task_status"]) {
+      const result = await executeTool(
+        name,
+        { mutationId: "updateTaskStatus", params: {} },
+        { organizationId: orgA.id, ownerId: userA.id, promptText: "test" }
+      );
+      expect(result.ok).toBe(false);
+      expect(result.summary).toContain("Unknown tool");
+    }
   });
 
   it("rejects an out-of-range row limit on a catalog query param at propose time", async () => {

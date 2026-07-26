@@ -6,12 +6,15 @@ import { db } from "@/server/db/client";
 import { projects, views } from "@/server/db/schema";
 import { runAgentLoop, type AgentEvent } from "@/server/agent/loop";
 import { checkRateLimit } from "@/server/agent/rate-limit";
+import { agentModelIds } from "@/lib/agent-models";
 
 const bodySchema = z
   .object({
     message: z.string().min(1).max(2000),
     projectId: z.string().uuid().optional(),
     viewId: z.string().uuid().optional(),
+    // Allow-listed — an arbitrary model string never reaches the SDK.
+    model: z.enum(agentModelIds).optional(),
   })
   .refine((body) => body.projectId || body.viewId, {
     message: "Either projectId (new view) or viewId (refine an existing view) is required",
@@ -23,7 +26,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const rateLimit = checkRateLimit(clerkUserId);
+  const rateLimit = await checkRateLimit(clerkUserId);
   if (!rateLimit.ok) {
     return Response.json(
       { error: `Too many requests — try again in ${rateLimit.retryAfterSeconds}s.` },
@@ -49,7 +52,7 @@ export async function POST(req: Request) {
   }
 
   const { organizationId, userId } = await ensureUserOrg();
-  const { message, projectId, viewId } = parsed.data;
+  const { message, projectId, viewId, model } = parsed.data;
 
   let viewName: string | undefined;
 
@@ -87,6 +90,7 @@ export async function POST(req: Request) {
           viewId,
           viewName,
           message,
+          model,
           emit,
         });
       } finally {

@@ -19,6 +19,7 @@ export function describeEntities() {
           "priority (low | medium | high | urgent)",
           "assigneeId",
           "dueDate (YYYY-MM-DD)",
+          "points (story points; 0 = unestimated)",
           "createdAt",
           "updatedAt",
         ],

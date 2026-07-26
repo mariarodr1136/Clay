@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   AlignLeft,
   BarChart3,
+  BookmarkPlus,
   Gauge,
   LayoutDashboard,
   ListChecks,
@@ -11,6 +14,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Table2,
+  Trash2,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { formatDistanceToNow } from "date-fns";
@@ -48,6 +52,71 @@ function WidgetSummary({ counts }: { counts: Record<string, number> }) {
         );
       })}
     </div>
+  );
+}
+
+function TemplatesSection() {
+  const router = useRouter();
+  const utils = trpc.useUtils();
+  const templatesQuery = trpc.views.listTemplates.useQuery();
+
+  const createFrom = trpc.views.createFromTemplate.useMutation({
+    onSuccess: ({ view }) => {
+      toast.success(`Created "${view.name}" from template`);
+      utils.views.list.invalidate();
+      router.push(`/views/${view.id}`);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const deleteTemplate = trpc.views.deleteTemplate.useMutation({
+    onSuccess: () => utils.views.listTemplates.invalidate(),
+    onError: (err) => toast.error(err.message),
+  });
+
+  if (!templatesQuery.data || templatesQuery.data.length === 0) return null;
+
+  return (
+    <section className="space-y-3">
+      <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+        Templates
+      </h2>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {templatesQuery.data.map((template) => (
+          <Card key={template.id} className="gap-3">
+            <CardContent className="flex h-full flex-col gap-3">
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="flex items-center gap-2 font-semibold tracking-tight">
+                  <BookmarkPlus className="text-muted-foreground size-4" />
+                  {template.name}
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Delete template"
+                  className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive -mt-1"
+                  onClick={() => deleteTemplate.mutate({ templateId: template.id })}
+                >
+                  <Trash2 />
+                </Button>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                Saved {formatDistanceToNow(new Date(template.createdAt), { addSuffix: true })}
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-auto self-start"
+                disabled={createFrom.isPending}
+                onClick={() => createFrom.mutate({ templateId: template.id })}
+              >
+                {createFrom.isPending ? "Creating…" : "Use template"}
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -138,6 +207,8 @@ export default function ViewsPage() {
           </div>
         </section>
       )}
+
+      <TemplatesSection />
     </div>
   );
 }

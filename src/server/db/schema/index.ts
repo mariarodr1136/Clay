@@ -6,3 +6,5 @@ export * from "./tasks";
 export * from "./comments";
 export * from "./activity-log";
 export * from "./views";
+export * from "./view-templates";
+export * from "./rate-limits";
