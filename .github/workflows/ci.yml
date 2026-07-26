@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# A newer push to the same branch makes the in-flight run obsolete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Throwaway values, so CI needs no repository secrets: Clerk validates the
+  # *format* of these at startup and nothing here calls Clerk's API. The
+  # publishable key decodes to "example.clerk.accounts.dev$", the shape Clerk
+  # expects.
+  #
+  # This is also why `npm run test:e2e` is not part of CI. It drives real
+  # browser navigations, and on a development instance Clerk answers those
+  # with a handshake against its own domain — which a fake instance cannot
+  # serve, so every page load fails with a 400. Running it here would need
+  # real Clerk keys as repository secrets (and would then be unavailable to
+  # pull requests from forks, which cannot read secrets). Run it locally.
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
+  CLERK_SECRET_KEY: sk_test_ci_dummy_value_not_a_real_secret
+
+jobs:
+  lint-and-test:
+    name: Lint and unit tests
+    runs-on: ubuntu-latest
+
+    # The suite talks to a real Postgres — the catalog, mutation, and
+    # rate-limit tests assert cross-org isolation against actual rows — so a
+    # throwaway database is provisioned per run rather than mocked.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: clay_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/clay_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Doubles as proof that the migrations bootstrap an empty database —
+      # the one path the Vercel build never exercises, since production's
+      # database already has the schema.
+      - name: Apply migrations
+        run: npm run db:migrate
+
+      - run: npm run lint
+
+      - run: npm test
+
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # No DATABASE_URL on purpose: the database client connects lazily, so a
+      # build that reaches for one at module scope is a regression worth
+      # failing on.
+      - run: npm run build
