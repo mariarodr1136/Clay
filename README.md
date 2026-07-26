@@ -145,6 +145,10 @@ Two notes on PDF export specifically:
 | `npm run db:generate` / `db:migrate` | Generate versioned SQL migrations from the schema / apply them |
 | `npm run db:studio` | Open Drizzle Studio to browse the database |
 
+Every pull request runs `lint`, the Vitest suite (against a throwaway Postgres service container), and a production build via [GitHub Actions](.github/workflows/ci.yml) — no repository secrets required.
+
+`npm run test:e2e` is deliberately **not** in CI and is meant to be run locally. It drives real browser navigations, and on a Clerk *development* instance those trigger a handshake against the instance's own domain, which throwaway keys can't serve. Wiring it into CI would mean putting real Clerk credentials in repository secrets — which pull requests from forks can't read anyway.
+
 ---
 
 ## Project Structure
