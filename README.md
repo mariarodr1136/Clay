@@ -8,7 +8,7 @@ Instead of a fixed set of dashboards and a settings menu to configure them, Clay
 
 **Live Demo:** [clay-gray.vercel.app](https://clay-gray.vercel.app)
 
-**Run Locally:** Open `/demo` (see [Getting Started](#getting-started)).
+**Run Locally:** Open `/demo` (see [Getting Started](#getting-started))
 
 ---
 
