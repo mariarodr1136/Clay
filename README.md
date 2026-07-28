@@ -75,6 +75,7 @@ Instead of a fixed set of dashboards and a settings menu to configure them, Clay
 - **Adversarial test coverage** — a dedicated security suite asserts the agent can never escalate a view to org-wide scope, can't reference an unknown widget type or catalog id, and can't write across an organization boundary even with a version id from the wrong org.
 - **Rate-limited by design** — 10 agent requests per 5-minute window per user, enforced server-side ahead of any Anthropic call, with the window state in Postgres so it holds across serverless instances and deploys.
 - **Real projects and tasks underneath** — a standard project/task tracker (status, priority, due dates, assignees, comments) sits under the generated-view layer, so there's always real data for views to bind to.
+- **Bring your existing backlog** — import tasks from a CSV (upload or paste). Columns are matched automatically where the header is recognisable, statuses and priorities are translated from the wording spreadsheets actually use ("In Progress", "P1", "Closed"), assignees are resolved against workspace members, and a dry-run preview reports every row that needs attention *before* anything is written. The parser round-trips this app's own CSV export, formula-guard and all.
 
 ---
 

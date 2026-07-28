@@ -7,12 +7,13 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
-import { CheckSquare, Plus, Trash2 } from "lucide-react";
+import { CheckSquare, Plus, Trash2, Upload } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { taskPriorities, taskStatuses } from "@/server/db/schema";
 import { statusMeta } from "@/lib/task-display";
 import { StatusBadge, PriorityBadge } from "@/components/task-badges";
 import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
+import { ImportDialog } from "@/components/tasks/import-dialog";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -79,6 +80,7 @@ export default function ProjectPage() {
   const [open, setOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<(typeof taskStatuses)[number] | null>(null);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const project = trpc.projects.get.useQuery({ id: projectId });
   const tasksQuery = trpc.tasks.listByProject.useQuery({ projectId });
@@ -123,6 +125,11 @@ export default function ProjectPage() {
             <p className="text-muted-foreground max-w-xl text-sm">{project.data.description}</p>
           )}
         </div>
+        <div className="flex items-center gap-2">
+        <Button variant="outline" onClick={() => setImportOpen(true)}>
+          <Upload data-icon="inline-start" />
+          Import
+        </Button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -245,7 +252,10 @@ export default function ProjectPage() {
             </Form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
+
+      <ImportDialog projectId={projectId} open={importOpen} onOpenChange={setImportOpen} />
 
       {statsQuery.data && (tasksQuery.data?.length ?? 0) > 0 && (
         <div className="flex flex-wrap items-center gap-2">
