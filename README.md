@@ -84,7 +84,7 @@ Instead of a fixed set of dashboards and a settings menu to configure them, Clay
 |---|---|
 | **Frontend** | Next.js 16 (App Router, Turbopack), React 19, TypeScript (strict), Tailwind CSS v4, shadcn/ui + Radix primitives, React Hook Form + Zod, Recharts |
 | **Backend** | tRPC 11, Drizzle ORM, PostgreSQL, Next.js Route Handlers |
-| **Auth** | Clerk (organizations provisioned automatically on first sign-in) |
+| **Auth** | Clerk, incl. Organizations — a private workspace on first sign-in, plus any shared org you're invited to, with the active one resolved per request |
 | **AI** | Anthropic Claude via `@anthropic-ai/sdk`, a bounded tool-use loop (max 6 rounds) over a fixed tool set |
 | **Exports** | `write-excel-file` for XLSX, hand-rolled RFC 4180 CSV, headless Chrome (`puppeteer-core` + `@sparticuz/chromium`) for PDF |
 | **Quality** | Vitest (unit + adversarial security tests), ESLint 9 + typescript-eslint |
@@ -117,7 +117,7 @@ npm run db:push
 npm run dev
 ```
 
-The app runs at http://localhost:3000. Sign up to get an empty personal workspace with a guided start — create your first project, or load a sample workspace (a seeded project plus generated views) with one click. Or visit `/demo` for a read-only, fully loaded showcase with no account: a six-project portfolio, eight example dashboards, scripted agent conversations, and an audit trail. Exports work there for real — open any demo view and download the workbook, a CSV, or the PDF.
+The app runs at http://localhost:3000. Sign up to get an empty personal workspace with a guided start — create your first project, or load a sample workspace (a seeded project plus generated views) with one click. Use the workspace switcher in the header to create a shared organization and invite teammates; everything in Clay is scoped to whichever workspace is active, and owners get the destructive actions (deleting a project, seeding sample data) that members don't. Or visit `/demo` for a read-only, fully loaded showcase with no account: a six-project portfolio, eight example dashboards, scripted agent conversations, and an audit trail. Exports work there for real — open any demo view and download the workbook, a CSV, or the PDF.
 
 To use the "ask your interface into existence" chat, paste your own Anthropic API key into the chat panel — it's sent per-request and never stored server-side.
 

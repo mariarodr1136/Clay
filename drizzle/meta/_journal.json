@@ -29,6 +29,13 @@
       "when": 1785274925272,
       "tag": "0003_agent-threads-and-run-telemetry",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785275756315,
+      "tag": "0004_multi-org-memberships",
+      "breakpoints": true
     }
   ]
 }

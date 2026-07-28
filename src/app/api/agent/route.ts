@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { auth } from "@clerk/nextjs/server";
-import { ensureUserOrg } from "@/server/auth/ensure-user-org";
+import { resolveActiveOrg } from "@/server/auth/resolve-org";
 import { db } from "@/server/db/client";
 import { projects } from "@/server/db/schema";
 import { activeView } from "@/server/db/view-access";
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     });
   }
 
-  const { organizationId, userId } = await ensureUserOrg();
+  const { organizationId, userId } = await resolveActiveOrg();
   const { message, projectId, viewId, model, threadId } = parsed.data;
 
   let viewName: string | undefined;

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, ownerProcedure } from "../trpc";
 import { db } from "@/server/db/client";
 import { projects, tasks } from "@/server/db/schema";
 import { seedDemoData } from "@/server/db/seed-demo-data";
@@ -39,7 +39,7 @@ export const projectsRouter = router({
   // Explicit opt-in replacement for the old always-on sign-up seeding: fills
   // an empty workspace with the sample project, tasks, and generated views
   // so a new user can explore a working workspace before adding real data.
-  seedSample: protectedProcedure.mutation(async ({ ctx }) => {
+  seedSample: ownerProcedure.mutation(async ({ ctx }) => {
     const existing = await db.query.projects.findFirst({
       where: eq(projects.organizationId, ctx.organizationId),
     });
@@ -83,7 +83,9 @@ export const projectsRouter = router({
       return project;
     }),
 
-  delete: protectedProcedure
+  // Deleting a project takes every teammate's tasks with it, so it is
+  // owner-only in a shared workspace.
+  delete: ownerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       await db

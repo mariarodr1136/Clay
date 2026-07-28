@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 import { db } from "@/server/db/client";
 import { organizations, viewVersions } from "@/server/db/schema";
 import { activeView } from "@/server/db/view-access";
-import { ensureUserOrg } from "@/server/auth/ensure-user-org";
+import { resolveActiveOrg } from "@/server/auth/resolve-org";
 import { parseView } from "@/lib/dsl/validate";
 import { collectViewDatasets, collectWidgetDataset } from "@/server/export/datasets";
 import { buildViewWorkbook } from "@/server/export/xlsx";
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ viewId:
   const { userId } = await auth();
   if (!userId) return new Response("Unauthorized", { status: 401 });
 
-  const { organizationId } = await ensureUserOrg();
+  const { organizationId } = await resolveActiveOrg();
   const { viewId } = await ctx.params;
 
   const parsedQuery = parseExportQuery(request);

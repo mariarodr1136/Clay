@@ -54,6 +54,18 @@ export const tasksRouter = router({
       return runCatalogMutation(ctx.organizationId, ctx.userId, "createTask", input);
     }),
 
+  // Through the mutation catalog like the rest: it re-checks that the
+  // assignee is a member of this workspace, which only became a meaningful
+  // check once workspaces could hold more than one person.
+  assign: protectedProcedure
+    .input(z.object({ id: z.string().uuid(), assigneeId: z.string().nullable() }))
+    .mutation(async ({ ctx, input }) => {
+      return runCatalogMutation(ctx.organizationId, ctx.userId, "assignTask", {
+        taskId: input.id,
+        assigneeId: input.assigneeId,
+      });
+    }),
+
   updateStatus: protectedProcedure
     .input(z.object({ id: z.string().uuid(), status: z.enum(taskStatuses) }))
     .mutation(async ({ ctx, input }) => {

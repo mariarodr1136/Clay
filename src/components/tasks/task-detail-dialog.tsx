@@ -10,6 +10,17 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+// Radix Select treats "" as "no value", which would make the unassigned
+// option unselectable — so it carries an explicit sentinel instead.
+const UNASSIGNED = "__unassigned__";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -72,6 +83,16 @@ export function TaskDetailDialog({
     { enabled: Boolean(taskId) }
   );
 
+  const membersQuery = trpc.members.list.useQuery(undefined, { enabled: Boolean(taskId) });
+
+  const assign = trpc.tasks.assign.useMutation({
+    onSuccess: () => {
+      utils.comments.taskDetail.invalidate();
+      utils.tasks.listByProject.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const addComment = trpc.comments.create.useMutation({
     onSuccess: () => {
       setDraft("");
@@ -111,6 +132,29 @@ export function TaskDetailDialog({
               {detail.task.points > 0 && (
                 <span className="text-muted-foreground text-xs">{detail.task.points} pts</span>
               )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground text-xs font-medium">Assignee</span>
+              <Select
+                value={detail.task.assigneeId ?? UNASSIGNED}
+                onValueChange={(value) =>
+                  taskId &&
+                  assign.mutate({ id: taskId, assigneeId: value === UNASSIGNED ? null : value })
+                }
+              >
+                <SelectTrigger size="sm" className="w-56">
+                  <SelectValue placeholder="Unassigned" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+                  {(membersQuery.data ?? []).map((member) => (
+                    <SelectItem key={member.userId} value={member.userId}>
+                      {member.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {detail.task.description && (

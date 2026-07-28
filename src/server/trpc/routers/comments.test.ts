@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { organizations, users, projects, tasks } from "@/server/db/schema";
+import { organizations, users, projects, tasks, type MembershipRole } from "@/server/db/schema";
 import { appRouter } from "./root";
 
 // Comments introduce two new authorization boundaries: a task id from
@@ -14,8 +14,8 @@ describe("comments authorization", () => {
   let other: typeof users.$inferSelect;
   let taskInA: typeof tasks.$inferSelect;
 
-  const caller = (userId: string, organizationId: string) =>
-    appRouter.createCaller({ userId, organizationId });
+  const caller = (userId: string, organizationId: string, role: MembershipRole = "owner") =>
+    appRouter.createCaller({ userId, organizationId, role });
 
   beforeAll(async () => {
     [orgA] = await db.insert(organizations).values({ name: "Comments Org A" }).returning();

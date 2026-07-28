@@ -43,13 +43,28 @@ export const publicProcedure = t.procedure.use(withDomainErrors);
 // organizationId here comes only from the authenticated session (never from
 // client input) — this is the org-scoping invariant the whole app relies on.
 export const protectedProcedure = t.procedure.use(withDomainErrors).use(({ ctx, next }) => {
-  if (!ctx.userId || !ctx.organizationId) {
+  if (!ctx.userId || !ctx.organizationId || !ctx.role) {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
   return next({
     ctx: {
       userId: ctx.userId,
       organizationId: ctx.organizationId,
+      role: ctx.role,
     },
   });
+});
+
+// For actions that reshape the whole workspace rather than one person's
+// work — seeding sample data over an org, publishing org-wide, destroying a
+// project and its tasks. In a personal workspace the only member is always
+// the owner, so this is a no-op there and only bites in a shared org.
+export const ownerProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.role !== "owner") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Only workspace owners can do that.",
+    });
+  }
+  return next({ ctx });
 });
