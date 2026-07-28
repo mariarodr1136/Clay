@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowUpRight, FolderKanban, KeyRound, MessageSquareText } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
@@ -34,11 +35,14 @@ const promptIdeas = [
 export default function ChatPage() {
   const projectsQuery = trpc.projects.list.useQuery();
   const viewsQuery = trpc.views.list.useQuery();
+  const searchParams = useSearchParams();
 
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [apiKey, setApiKey] = useByokKey();
   const [model, setModel] = useByokModel();
-  const [message, setMessage] = useState("");
+  // Seeded from ?prompt=, which is how the command palette hands free text
+  // over. Only the initial value — typing after that isn't fighting the URL.
+  const [message, setMessage] = useState(() => searchParams.get("prompt") ?? "");
   const { transcript, isRunning, send } = useAgentStream();
 
   // Default to the first project until the user explicitly picks one —

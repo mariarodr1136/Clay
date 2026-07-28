@@ -4,6 +4,7 @@ import { commentsRouter } from "./comments";
 import { importRouter } from "./import";
 import { membersRouter } from "./members";
 import { projectsRouter } from "./projects";
+import { searchRouter } from "./search";
 import { tasksRouter } from "./tasks";
 import { viewsRouter } from "./views";
 
@@ -13,6 +14,7 @@ export const appRouter = router({
   import: importRouter,
   members: membersRouter,
   projects: projectsRouter,
+  search: searchRouter,
   tasks: tasksRouter,
   views: viewsRouter,
 });

@@ -75,6 +75,7 @@ Instead of a fixed set of dashboards and a settings menu to configure them, Clay
 - **Adversarial test coverage** — a dedicated security suite asserts the agent can never escalate a view to org-wide scope, can't reference an unknown widget type or catalog id, and can't write across an organization boundary even with a version id from the wrong org.
 - **Rate-limited by design** — 10 agent requests per 5-minute window per user, enforced server-side ahead of any Anthropic call, with the window state in Postgres so it holds across serverless instances and deploys.
 - **Real projects and tasks underneath** — a standard project/task tracker (status, priority, due dates, assignees, comments) sits under the generated-view layer, so there's always real data for views to bind to.
+- **⌘K everything** — one palette searches projects, views, and tasks across the workspace, and free text falls through to the agent, so "build me a delivery dashboard" is a keystroke away from anywhere in the app.
 - **Bring your existing backlog** — import tasks from a CSV (upload or paste). Columns are matched automatically where the header is recognisable, statuses and priorities are translated from the wording spreadsheets actually use ("In Progress", "P1", "Closed"), assignees are resolved against workspace members, and a dry-run preview reports every row that needs attention *before* anything is written. The parser round-trips this app's own CSV export, formula-guard and all.
 
 ---
@@ -124,7 +125,12 @@ To use the "ask your interface into existence" chat, paste your own Anthropic AP
 
 ### Deployment
 
-The live demo runs on [Vercel](https://vercel.com), with Postgres on [Neon](https://neon.tech) and a dedicated Clerk instance for public sign-ups. To deploy your own copy: import the repo into Vercel, add a Postgres database (the Neon integration under the project's Storage tab wires up `DATABASE_URL` automatically), and set `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`. **Schema changes apply themselves on deploy**: `vercel.json` sets the build command to `npm run db:migrate && npm run build`, and the migration files in `drizzle/` are idempotent — safe on a brand-new database, a database that already has the schema, or one that was previously managed with `db:push`.
+The live demo runs on [Vercel](https://vercel.com), with Postgres on [Neon](https://neon.tech) and a dedicated Clerk instance for public sign-ups. To deploy your own copy: import the repo into Vercel, add a Postgres database (the Neon integration under the project's Storage tab wires up `DATABASE_URL` automatically), and set `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`.
+
+**Enable Clerk Organizations, set to "membership optional."** The workspace switcher in the header is Clerk's `<OrganizationSwitcher />`, and Clerk ships the Organizations feature turned *off*. Two things to know:
+
+- **Development and production are separate Clerk instances.** Enabling it locally does nothing for your deployment — you have to turn it on again in the production instance, or the switcher breaks for real users.
+- **Choose "membership optional", not "membership required."** Clay falls back to a private personal workspace when there's no active organization (see `resolveActiveOrg`), which is what a solo user and every brand-new signup lands in. "Membership required" makes Clerk block people behind a create-an-organization screen before they ever reach the app, and that fallback path stops being reachable. **Schema changes apply themselves on deploy**: `vercel.json` sets the build command to `npm run db:migrate && npm run build`, and the migration files in `drizzle/` are idempotent — safe on a brand-new database, a database that already has the schema, or one that was previously managed with `db:push`.
 
 One caveat about `vercel env pull`: environment variables marked *sensitive* on Vercel are pulled as the literal string `"[SENSITIVE]"`. The resulting `.env.production.local` outranks `.env.local` for local production builds and will break them with "Publishable key not valid" — if you pull env vars and local `next build`/`next start` starts failing, delete that file (`npm run test:e2e` guards itself against this by lifting `.env.local` into the environment).
 

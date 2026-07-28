@@ -9,6 +9,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
 import { AppClerkProvider } from "@/components/clerk-provider";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
+import { CommandPalette } from "@/components/command-palette";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { organizationId } = await resolveActiveOrg();
@@ -33,6 +34,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <AppNav />
             </div>
             <div className="flex items-center gap-2">
+              <CommandPalette />
               <ThemeToggle />
               <UserMenu />
             </div>
