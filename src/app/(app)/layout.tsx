@@ -10,6 +10,7 @@ import { UserMenu } from "@/components/user-menu";
 import { AppClerkProvider } from "@/components/clerk-provider";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { CommandPalette } from "@/components/command-palette";
+import { SafeBoundary } from "@/components/safe-boundary";
 import { DemoBanner } from "@/components/demo-banner";
 import { LeaveDemoButton } from "@/components/leave-demo-button";
 
@@ -35,8 +36,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </span>
             ) : (
               // Switching org here changes what every org-scoped query
-              // returns, and it's also where members get invited.
-              <WorkspaceSwitcher fallbackName={org?.name ?? "Workspace"} />
+              // returns, and it's also where members get invited. Boundaried
+              // because it depends on a Clerk feature that has to be enabled
+              // per instance — a production instance without it must lose the
+              // switcher, not the app.
+              <SafeBoundary
+                label="workspace-switcher"
+                fallback={
+                  <span className="bg-muted text-muted-foreground rounded-full px-2.5 py-0.5 text-xs font-medium">
+                    {org?.name ?? "Workspace"}
+                  </span>
+                }
+              >
+                <WorkspaceSwitcher fallbackName={org?.name ?? "Workspace"} />
+              </SafeBoundary>
             )}
             <AppNav />
           </div>

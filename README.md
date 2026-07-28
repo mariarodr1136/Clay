@@ -136,6 +136,14 @@ The live demo runs on [Vercel](https://vercel.com), with Postgres on [Neon](http
 
 One caveat about `vercel env pull`: environment variables marked *sensitive* on Vercel are pulled as the literal string `"[SENSITIVE]"`. The resulting `.env.production.local` outranks `.env.local` for local production builds and will break them with "Publishable key not valid" — if you pull env vars and local `next build`/`next start` starts failing, delete that file (`npm run test:e2e` guards itself against this by lifting `.env.local` into the environment).
 
+**The demo writes to your production database.** `/demo` provisions a real workspace per visitor — that's what makes it the product rather than a mock — so anonymous visitors create rows. Three things keep that bounded, and none of them need configuring:
+
+- Workspace creation is rate limited per IP, on its own budget separate from the agent's.
+- A returning visitor reuses their existing workspace instead of minting another.
+- Expired workspaces are deleted by the daily `/api/cron/sweep-guests` job, and opportunistically on demo entry so cleanup never depends on cron availability (frequency is plan-limited on Vercel). Correctness doesn't depend on either: a workspace stops resolving the moment it expires, whether or not its rows have been collected yet.
+
+Set `CRON_SECRET` to require a bearer token on the sweep endpoint. Without it the endpoint is public, though all it can do is delete workspaces that have already expired.
+
 Two notes on PDF export specifically:
 
 - `PDF_SIGNING_SECRET` is optional — it falls back to `CLERK_SECRET_KEY`, so there's nothing extra to configure.

@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { checkRateLimit, GUEST_WORKSPACE_LIMIT } from "@/server/agent/rate-limit";
 import { GUEST_COOKIE, GUEST_TTL_MS, readGuestSession, signGuestToken } from "@/server/auth/guest-session";
-import { createGuestWorkspace, guestWorkspaceIsLive } from "@/server/auth/guest-workspace";
+import {
+  createGuestWorkspace,
+  guestWorkspaceIsLive,
+  sweepExpiredGuestWorkspaces,
+} from "@/server/auth/guest-workspace";
 
 // The door into the demo, and the only route that knows the demo exists.
 //
@@ -36,6 +40,21 @@ export async function GET(request: NextRequest) {
   const rate = await checkRateLimit(`guest:${clientIp(request)}`, GUEST_WORKSPACE_LIMIT);
   if (!rate.ok) {
     return NextResponse.redirect(new URL("/demo/busy", request.url));
+  }
+
+  // Opportunistic garbage collection, so cleanup never depends on the cron
+  // being available — cron frequency is plan-limited on Vercel, and the
+  // scheduled sweep only runs daily. Correctness doesn't rely on either:
+  // an expired workspace stops resolving the moment it expires (see
+  // guestWorkspaceIsLive), so sweeping is purely about reclaiming rows.
+  // Sampled rather than run every time to keep it off the critical path of
+  // most visits; the query is indexed and usually deletes nothing.
+  if (Math.random() < 0.1) {
+    try {
+      await sweepExpiredGuestWorkspaces();
+    } catch (error) {
+      console.error("[demo] opportunistic guest sweep failed", error);
+    }
   }
 
   const session = await createGuestWorkspace();
