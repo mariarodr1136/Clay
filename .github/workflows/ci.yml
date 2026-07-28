@@ -20,12 +20,12 @@ env:
   # publishable key decodes to "example.clerk.accounts.dev$", the shape Clerk
   # expects.
   #
-  # This is also why `npm run test:e2e` is not part of CI. It drives real
-  # browser navigations, and on a development instance Clerk answers those
-  # with a handshake against its own domain — which a fake instance cannot
-  # serve, so every page load fails with a 400. Running it here would need
-  # real Clerk keys as repository secrets (and would then be unavailable to
-  # pull requests from forks, which cannot read secrets). Run it locally.
+  # The e2e suite runs here too. It used to be local-only because every page
+  # loaded Clerk's frontend bundle from the root layout, which throwaway keys
+  # can't serve. ClerkProvider is now mounted only on the signed-in app and
+  # the sign-in/sign-up pages, and /demo, /share, /print and /health are
+  # excluded from the auth middleware — so the public surface the e2e suite
+  # drives never touches Clerk at all.
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
   CLERK_SECRET_KEY: sk_test_ci_dummy_value_not_a_real_secret
 
@@ -93,3 +93,48 @@ jobs:
       # build that reaches for one at module scope is a regression worth
       # failing on.
       - run: npm run build
+
+  e2e:
+    name: Demo e2e (headless Chrome)
+    runs-on: ubuntu-latest
+
+    # The demo renders from fixtures, but the app still boots a database
+    # client, and the export routes it exercises go through the same code
+    # path as the real ones.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: clay_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/clay_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Apply migrations
+        run: npm run db:migrate
+
+      # Not `npm run test:e2e`: that wrapper lifts .env.local into the
+      # environment to dodge a `vercel env pull` footgun, and there is no
+      # .env.local here — the job's own env is already the source of truth.
+      - run: npx next build
+
+      - run: npx vitest run --config vitest.e2e.config.ts

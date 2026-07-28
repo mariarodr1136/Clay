@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { AgentEvent } from "@/server/agent/loop";
 
 export type TranscriptItem =
+  | { kind: "user"; text: string }
   | { kind: "text"; text: string }
   | { kind: "status"; text: string; ok: boolean }
   | { kind: "view"; viewId: string; name: string }
@@ -11,6 +12,10 @@ export type TranscriptItem =
 
 function applyEvent(prev: TranscriptItem[], event: AgentEvent): TranscriptItem[] {
   switch (event.type) {
+    // Handled by send(), which stores the id for subsequent turns; nothing
+    // about it belongs in the visible transcript.
+    case "thread_started":
+      return prev;
     case "text":
       return [...prev, { kind: "text", text: event.text }];
     // Streaming text: text_start opens a fresh entry, each delta appends to
@@ -43,20 +48,26 @@ function applyEvent(prev: TranscriptItem[], event: AgentEvent): TranscriptItem[]
 export function useAgentStream() {
   const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
   const [isRunning, setIsRunning] = useState(false);
+  // The server mints this on the first message and echoes it back; sending
+  // it on later turns is what makes the model see the conversation instead
+  // of just the newest sentence.
+  const [threadId, setThreadId] = useState<string | null>(null);
 
   async function send(
     body: { message: string; projectId?: string; viewId?: string; model?: string },
     apiKey: string
   ): Promise<string | null> {
     setIsRunning(true);
-    setTranscript([]);
+    // The transcript accumulates across turns now — clearing it here would
+    // hide the very history the model is being given.
+    setTranscript((prev) => [...prev, { kind: "user", text: body.message }]);
     let resultViewId: string | null = null;
 
     try {
       const res = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Anthropic-Api-Key": apiKey },
-        body: JSON.stringify(body),
+        body: JSON.stringify(threadId ? { ...body, threadId } : body),
       });
 
       if (!res.ok || !res.body) {
@@ -80,6 +91,7 @@ export function useAgentStream() {
           if (!line.trim()) continue;
           const event = JSON.parse(line) as AgentEvent;
           if (event.type === "view_created") resultViewId = event.viewId;
+          if (event.type === "thread_started") setThreadId(event.threadId);
           setTranscript((prev) => applyEvent(prev, event));
         }
       }
@@ -95,5 +107,12 @@ export function useAgentStream() {
     return resultViewId;
   }
 
-  return { transcript, isRunning, send };
+  // Starts a fresh conversation: drops the thread id so the next send opens
+  // a new thread server-side rather than continuing this one.
+  function reset() {
+    setTranscript([]);
+    setThreadId(null);
+  }
+
+  return { transcript, isRunning, threadId, send, reset };
 }

@@ -1,6 +1,6 @@
 # Clay
 
-![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6) ![Next.js](https://img.shields.io/badge/Next.js_16-App_Router-000000) ![React](https://img.shields.io/badge/React_19-Frontend-61DAFB) ![tRPC](https://img.shields.io/badge/tRPC-11-2596BE) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Drizzle_ORM-4169E1) ![Claude](https://img.shields.io/badge/Claude-Agent_Loop-D97757) ![Vitest](https://img.shields.io/badge/Vitest-72_tests_+_e2e-6E9F18) ![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000)
+![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6) ![Next.js](https://img.shields.io/badge/Next.js_16-App_Router-000000) ![React](https://img.shields.io/badge/React_19-Frontend-61DAFB) ![tRPC](https://img.shields.io/badge/tRPC-11-2596BE) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Drizzle_ORM-4169E1) ![Claude](https://img.shields.io/badge/Claude-Agent_Loop-D97757) ![Vitest](https://img.shields.io/badge/Vitest-81_tests_+_e2e-6E9F18) ![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000)
 
 A project tracker where the UI isn't fixed. Describe the dashboard you need in plain language, and an agent built on the Claude API writes it — live, against your real projects and tasks, in seconds.
 
@@ -145,9 +145,11 @@ Two notes on PDF export specifically:
 | `npm run db:generate` / `db:migrate` | Generate versioned SQL migrations from the schema / apply them |
 | `npm run db:studio` | Open Drizzle Studio to browse the database |
 
-Every pull request runs `lint`, the Vitest suite (against a throwaway Postgres service container), and a production build via [GitHub Actions](.github/workflows/ci.yml) — no repository secrets required.
+Every pull request runs `lint`, the Vitest suite (against a throwaway Postgres service container), a production build, and the headless-Chrome e2e suite over `/demo` via [GitHub Actions](.github/workflows/ci.yml) — no repository secrets required.
 
-`npm run test:e2e` is deliberately **not** in CI and is meant to be run locally. It drives real browser navigations, and on a Clerk *development* instance those trigger a handshake against the instance's own domain, which throwaway keys can't serve. Wiring it into CI would mean putting real Clerk credentials in repository secrets — which pull requests from forks can't read anyway.
+The e2e suite runs in CI too, with no repository secrets. It used to be local-only: `ClerkProvider` sat in the root layout, so every page — including `/demo` — loaded Clerk's frontend bundle, which throwaway keys can't serve. The provider is now mounted only where it's actually needed (the signed-in app, and the sign-in/sign-up pages), and `/demo`, `/share`, `/print`, and `/health` are excluded from the auth middleware, so the public surface the e2e suite drives never touches Clerk. Public pages also no longer pay to download Clerk's JS.
+
+`npm run test:e2e` remains the local entry point — it lifts `.env.local` into the environment to dodge the `vercel env pull` footgun described above. CI runs `next build` plus the e2e config directly, since the workflow's own env is already the source of truth.
 
 ---
 

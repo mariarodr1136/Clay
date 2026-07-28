@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { ClerkProvider } from "@clerk/nextjs";
 import { TRPCProvider } from "@/lib/trpc/provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -26,36 +25,20 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // No ClerkProvider here on purpose — see AppClerkProvider. Public routes
+  // (landing, /demo, /share, /print) render without Clerk entirely.
   return (
-    <ClerkProvider
-      appearance={{
-        variables: {
-          colorPrimary: "oklch(0.5 0.17 264)",
-          borderRadius: "1rem",
-          fontFamily: "var(--font-geist-sans)",
-        },
-        elements: {
-          card: "shadow-2xl ring-1 ring-black/[0.06]",
-          formButtonPrimary:
-            "rounded-full shadow-sm text-sm normal-case hover:opacity-90",
-          socialButtonsBlockButton: "rounded-full",
-          formFieldInput: "rounded-xl",
-          footerActionLink: "text-foreground",
-        },
-      }}
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${geistSans.variable} ${geistMono.variable} h-full scroll-smooth antialiased`}
     >
-      <html
-        lang="en"
-        suppressHydrationWarning
-        className={`${geistSans.variable} ${geistMono.variable} h-full scroll-smooth antialiased`}
-      >
-        <body className="min-h-full flex flex-col">
-          <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-            <TRPCProvider>{children}</TRPCProvider>
-            <Toaster />
-          </ThemeProvider>
-        </body>
-      </html>
-    </ClerkProvider>
+      <body className="min-h-full flex flex-col">
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <TRPCProvider>{children}</TRPCProvider>
+          <Toaster />
+        </ThemeProvider>
+      </body>
+    </html>
   );
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { format } from "date-fns";
 import { Globe } from "lucide-react";
 import { db } from "@/server/db/client";
@@ -29,7 +29,10 @@ export default async function SharedViewPage({
     </main>
   );
 
-  const view = await db.query.views.findFirst({ where: eq(views.shareToken, token) });
+  // A trashed view stops resolving here even if the link was already shared.
+  const view = await db.query.views.findFirst({
+    where: and(eq(views.shareToken, token), isNull(views.deletedAt)),
+  });
   if (!view?.currentVersionId) return notFound;
 
   const version = await db.query.viewVersions.findFirst({

@@ -17,9 +17,14 @@ export default clerkMiddleware(async (auth, req) => {
   }
 });
 
+// Deliberately public, and excluded from the matcher so Clerk's middleware
+// never runs there: /demo (sample-data showcase), /share/<token> (the token
+// is the whole capability), /print (authorized by a signed print token),
+// and /health. Keeping them out means a public visitor never pays for an
+// auth round-trip — and the /demo e2e suite can run against throwaway keys.
 export const config = {
   matcher: [
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    "/((?!_next|demo|share|print|health|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
     "/(api|trpc)(.*)",
   ],
 };

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { db } from "@/server/db/client";
 import { views, viewVersions, viewTemplates } from "@/server/db/schema";
@@ -8,6 +8,8 @@ import { layoutItemSchema, viewSchema } from "@/lib/dsl/schema";
 import { runCatalogQuery } from "@/server/data-access/catalog";
 import { runCatalogMutation } from "@/server/data-access/mutations";
 import { createView, patchView } from "@/server/db/create-view";
+import { activeView, activeViewsInOrg } from "@/server/db/view-access";
+import { NotFoundError } from "@/server/errors";
 import type { ViewInput } from "@/lib/dsl/schema";
 
 export const viewsRouter = router({
@@ -15,7 +17,7 @@ export const viewsRouter = router({
   // the current version, per-type widget counts, and how many versions exist.
   list: protectedProcedure.query(async ({ ctx }) => {
     const rows = await db.query.views.findMany({
-      where: eq(views.organizationId, ctx.organizationId),
+      where: activeViewsInOrg(ctx.organizationId),
       orderBy: desc(views.updatedAt),
     });
 
@@ -59,9 +61,9 @@ export const viewsRouter = router({
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const view = await db.query.views.findFirst({
-        where: and(eq(views.id, input.id), eq(views.organizationId, ctx.organizationId)),
+        where: activeView(input.id, ctx.organizationId),
       });
-      if (!view || !view.currentVersionId) throw new Error("View not found");
+      if (!view || !view.currentVersionId) throw new NotFoundError("View");
 
       const version = await db.query.viewVersions.findFirst({
         where: eq(viewVersions.id, view.currentVersionId),
@@ -116,9 +118,9 @@ export const viewsRouter = router({
     .input(z.object({ viewId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const view = await db.query.views.findFirst({
-        where: and(eq(views.id, input.viewId), eq(views.organizationId, ctx.organizationId)),
+        where: activeView(input.viewId, ctx.organizationId),
       });
-      if (!view) throw new Error("View not found");
+      if (!view) throw new NotFoundError("View");
 
       return db.query.viewVersions.findMany({
         where: eq(viewVersions.viewId, input.viewId),
@@ -139,9 +141,9 @@ export const viewsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const view = await db.query.views.findFirst({
-        where: and(eq(views.id, input.viewId), eq(views.organizationId, ctx.organizationId)),
+        where: activeView(input.viewId, ctx.organizationId),
       });
-      if (!view?.currentVersionId) throw new Error("View not found");
+      if (!view?.currentVersionId) throw new NotFoundError("View");
 
       const current = await db.query.viewVersions.findFirst({
         where: eq(viewVersions.id, view.currentVersionId),
@@ -170,14 +172,14 @@ export const viewsRouter = router({
       // Org ownership is checked before touching the target version's
       // content at all, not just at the eventual patchView call.
       const view = await db.query.views.findFirst({
-        where: and(eq(views.id, input.viewId), eq(views.organizationId, ctx.organizationId)),
+        where: activeView(input.viewId, ctx.organizationId),
       });
-      if (!view) throw new Error("View not found");
+      if (!view) throw new NotFoundError("View");
 
       const target = await db.query.viewVersions.findFirst({
         where: and(eq(viewVersions.id, input.versionId), eq(viewVersions.viewId, input.viewId)),
       });
-      if (!target) throw new Error("Version not found");
+      if (!target) throw new NotFoundError("Version");
 
       return patchView({
         organizationId: ctx.organizationId,
@@ -197,10 +199,91 @@ export const viewsRouter = router({
       const [updated] = await db
         .update(views)
         .set({ scope: "org", updatedAt: new Date() })
-        .where(and(eq(views.id, input.viewId), eq(views.organizationId, ctx.organizationId)))
+        .where(activeView(input.viewId, ctx.organizationId))
         .returning();
-      if (!updated) throw new Error("View not found");
+      if (!updated) throw new NotFoundError("View");
       return updated;
+    }),
+
+  rename: protectedProcedure
+    .input(z.object({ viewId: z.string().uuid(), name: z.string().min(1).max(200) }))
+    .mutation(async ({ ctx, input }) => {
+      // A rename is metadata, not content: it deliberately does not mint a
+      // new version, so the history panel keeps showing real schema changes
+      // rather than filling up with title edits.
+      const [updated] = await db
+        .update(views)
+        .set({ name: input.name, updatedAt: new Date() })
+        .where(activeView(input.viewId, ctx.organizationId))
+        .returning();
+      if (!updated) throw new NotFoundError("View");
+      return updated;
+    }),
+
+  // Soft delete. Versions, templates stamped from this view, and the audit
+  // trail all survive — the view just leaves the gallery. Any live share
+  // link stops resolving immediately (see activeView), which is the
+  // behaviour someone reaching for "delete" actually wants.
+  delete: protectedProcedure
+    .input(z.object({ viewId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const [updated] = await db
+        .update(views)
+        .set({ deletedAt: new Date() })
+        .where(activeView(input.viewId, ctx.organizationId))
+        .returning();
+      if (!updated) throw new NotFoundError("View");
+      return { id: updated.id };
+    }),
+
+  restore: protectedProcedure
+    .input(z.object({ viewId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const [updated] = await db
+        .update(views)
+        .set({ deletedAt: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(views.id, input.viewId),
+            eq(views.organizationId, ctx.organizationId),
+            isNotNull(views.deletedAt)
+          )
+        )
+        .returning();
+      if (!updated) throw new NotFoundError("View");
+      return updated;
+    }),
+
+  listTrash: protectedProcedure.query(async ({ ctx }) => {
+    return db.query.views.findMany({
+      where: and(eq(views.organizationId, ctx.organizationId), isNotNull(views.deletedAt)),
+      orderBy: desc(views.deletedAt),
+    });
+  }),
+
+  // Irreversible, and deliberately separate from `delete`: this is the only
+  // path that destroys version history, so it can only be reached from the
+  // trash, on a view that was already soft-deleted.
+  purge: protectedProcedure
+    .input(z.object({ viewId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const view = await db.query.views.findFirst({
+        where: and(
+          eq(views.id, input.viewId),
+          eq(views.organizationId, ctx.organizationId),
+          isNotNull(views.deletedAt)
+        ),
+      });
+      if (!view) throw new NotFoundError("View");
+
+      // views.current_version_id references view_versions, so the pointer
+      // has to be dropped before the versions it points at.
+      await db.transaction(async (tx) => {
+        await tx.update(views).set({ currentVersionId: null }).where(eq(views.id, input.viewId));
+        await tx.delete(viewVersions).where(eq(viewVersions.viewId, input.viewId));
+        await tx.delete(views).where(eq(views.id, input.viewId));
+      });
+      return { id: input.viewId };
     }),
 
   // Org-wide audit trail: who/what/when for every view proposal, whether
@@ -223,7 +306,7 @@ export const viewsRouter = router({
         })
         .from(viewVersions)
         .innerJoin(views, eq(views.id, viewVersions.viewId))
-        .where(eq(views.organizationId, ctx.organizationId))
+        .where(activeViewsInOrg(ctx.organizationId))
         .orderBy(desc(viewVersions.createdAt))
         .limit(input.limit);
     }),
@@ -234,9 +317,9 @@ export const viewsRouter = router({
       const [updated] = await db
         .update(views)
         .set({ scope: "personal", updatedAt: new Date() })
-        .where(and(eq(views.id, input.viewId), eq(views.organizationId, ctx.organizationId)))
+        .where(activeView(input.viewId, ctx.organizationId))
         .returning();
-      if (!updated) throw new Error("View not found");
+      if (!updated) throw new NotFoundError("View");
       return updated;
     }),
 
@@ -248,9 +331,9 @@ export const viewsRouter = router({
     .input(z.object({ viewId: z.string().uuid(), enabled: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
       const view = await db.query.views.findFirst({
-        where: and(eq(views.id, input.viewId), eq(views.organizationId, ctx.organizationId)),
+        where: activeView(input.viewId, ctx.organizationId),
       });
-      if (!view) throw new Error("View not found");
+      if (!view) throw new NotFoundError("View");
 
       const shareToken = input.enabled
         ? (view.shareToken ?? randomBytes(24).toString("base64url"))
@@ -259,7 +342,7 @@ export const viewsRouter = router({
       const [updated] = await db
         .update(views)
         .set({ shareToken })
-        .where(and(eq(views.id, input.viewId), eq(views.organizationId, ctx.organizationId)))
+        .where(activeView(input.viewId, ctx.organizationId))
         .returning();
       return { shareToken: updated.shareToken };
     }),
@@ -272,9 +355,9 @@ export const viewsRouter = router({
     .input(z.object({ viewId: z.string().uuid(), name: z.string().min(1).max(200).optional() }))
     .mutation(async ({ ctx, input }) => {
       const view = await db.query.views.findFirst({
-        where: and(eq(views.id, input.viewId), eq(views.organizationId, ctx.organizationId)),
+        where: activeView(input.viewId, ctx.organizationId),
       });
-      if (!view?.currentVersionId) throw new Error("View not found");
+      if (!view?.currentVersionId) throw new NotFoundError("View");
 
       const version = await db.query.viewVersions.findFirst({
         where: eq(viewVersions.id, view.currentVersionId),
@@ -309,7 +392,7 @@ export const viewsRouter = router({
           eq(viewTemplates.organizationId, ctx.organizationId)
         ),
       });
-      if (!template) throw new Error("Template not found");
+      if (!template) throw new NotFoundError("Template");
 
       // Re-validated through the DSL on the way out of storage, and always
       // born personal — instantiating a template is not a publish.

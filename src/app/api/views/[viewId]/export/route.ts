@@ -1,8 +1,9 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { auth } from "@clerk/nextjs/server";
 import type { NextRequest } from "next/server";
 import { db } from "@/server/db/client";
-import { organizations, views, viewVersions } from "@/server/db/schema";
+import { organizations, viewVersions } from "@/server/db/schema";
+import { activeView } from "@/server/db/view-access";
 import { ensureUserOrg } from "@/server/auth/ensure-user-org";
 import { parseView } from "@/lib/dsl/validate";
 import { collectViewDatasets, collectWidgetDataset } from "@/server/export/datasets";
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ viewId:
   const { format, widgetId, filters } = parsedQuery.data;
 
   const view = await db.query.views.findFirst({
-    where: and(eq(views.id, viewId), eq(views.organizationId, organizationId)),
+    where: activeView(viewId, organizationId),
   });
   if (!view?.currentVersionId) return new Response("View not found", { status: 404 });
 

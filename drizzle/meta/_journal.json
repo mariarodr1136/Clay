@@ -15,6 +15,20 @@
       "when": 1785105544940,
       "tag": "0001_points-sharing-templates-ratelimits",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785274012029,
+      "tag": "0002_indexes-and-view-soft-delete",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1785274925272,
+      "tag": "0003_agent-threads-and-run-telemetry",
+      "breakpoints": true
     }
   ]
 }

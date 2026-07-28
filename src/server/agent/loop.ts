@@ -8,6 +8,7 @@ import {
 } from "./tools/schemas";
 import { executeTool } from "./execute-tool";
 import { DEFAULT_AGENT_MODEL, type AgentModelId } from "@/lib/agent-models";
+import type { AgentRunOutcome } from "@/server/db/schema";
 
 const MAX_ROUNDS = 6;
 const MAX_TOKENS = 4096;
@@ -81,6 +82,60 @@ Two kinds of request, two endings:
 - If the user is asking a question about their data ("which project is most behind?", "who has the most overdue work?") rather than asking for a dashboard, don't force a view on them: use run_query to get the real numbers, then answer directly in text, citing the figures you found. Offer to build a view of it only if that would genuinely help.`;
 }
 
+// The subset of MessageParam this loop ever produces. MessageParam's role
+// also admits "system", which the Messages API doesn't accept in the
+// messages array — narrowing here keeps that impossible state out of the
+// thread store.
+export type AgentTurnMessage = {
+  role: "user" | "assistant";
+  content: Anthropic.MessageParam["content"];
+};
+
+// Everything the caller needs to persist the turn and record telemetry —
+// returned rather than written here so the loop stays free of database
+// concerns and the eval harness can run it without a thread.
+export type AgentRunResult = {
+  outcome: AgentRunOutcome;
+  model: AgentModelId;
+  rounds: number;
+  toolCalls: number;
+  toolErrors: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  latencyMs: number;
+  // The messages this run added, ready to append to the thread.
+  turn: AgentTurnMessage[];
+  viewId?: string;
+  errorMessage?: string;
+};
+
+// Marks the end of the replayed history as a cache breakpoint, so a
+// follow-up turn reads every earlier turn (and its tool rounds) from cache
+// instead of re-paying for them. Only the last history block is marked —
+// breakpoints are a limited resource, and the tool schemas and system
+// prompt already hold the other two.
+function withHistoryCacheBreakpoint(
+  messages: Anthropic.MessageParam[],
+  historyLength: number
+): Anthropic.MessageParam[] {
+  if (historyLength === 0) return messages;
+
+  return messages.map((message, index) => {
+    if (index !== historyLength - 1 || !Array.isArray(message.content)) return message;
+
+    const blocks = [...message.content];
+    const last = blocks[blocks.length - 1];
+    // Only text and tool_result blocks accept cache_control; a turn ending
+    // in anything else is left alone rather than risking an API rejection.
+    if (!last || (last.type !== "text" && last.type !== "tool_result")) return message;
+
+    blocks[blocks.length - 1] = { ...last, cache_control: { type: "ephemeral" } };
+    return { ...message, content: blocks };
+  });
+}
+
 export type AgentEvent =
   | { type: "text"; text: string }
   // Streamed fragment of the current text block — the client appends these
@@ -90,6 +145,9 @@ export type AgentEvent =
   | { type: "tool_call"; name: string; input: unknown }
   | { type: "tool_result"; name: string; ok: boolean; summary: string }
   | { type: "view_created"; viewId: string; name: string }
+  // Emitted first on every run so a client that started without a thread id
+  // learns the one to send with its next message.
+  | { type: "thread_started"; threadId: string }
   | { type: "error"; message: string }
   | { type: "done" };
 
@@ -102,17 +160,47 @@ export async function runAgentLoop(params: {
   viewName?: string;
   message: string;
   model?: AgentModelId;
+  // Prior turns of this conversation, oldest-first. Empty for a new thread.
+  history?: Anthropic.MessageParam[];
   emit: (event: AgentEvent) => void;
-}) {
+}): Promise<AgentRunResult> {
   const { apiKey, organizationId, userId, projectId, viewId, viewName, message, emit } = params;
   const client = new Anthropic({ apiKey });
+  const model = params.model ?? DEFAULT_AGENT_MODEL;
+  const startedAt = Date.now();
 
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: message }];
+  const history = params.history ?? [];
+  const turn: AgentTurnMessage[] = [{ role: "user", content: message }];
+  // History is replayed ahead of this turn but never re-persisted, so the
+  // turn array stays exactly the delta this run appends to the thread.
+  const messages: Anthropic.MessageParam[] = [...history, ...turn];
+
+  const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+  let toolCalls = 0;
+  let toolErrors = 0;
+  let roundsUsed = 0;
+  let producedText = false;
+
+  const finish = (
+    outcome: AgentRunOutcome,
+    extra: { viewId?: string; errorMessage?: string } = {}
+  ): AgentRunResult => ({
+    outcome,
+    model,
+    rounds: roundsUsed,
+    toolCalls,
+    toolErrors,
+    ...usage,
+    latencyMs: Date.now() - startedAt,
+    turn,
+    ...extra,
+  });
 
   try {
     for (let round = 0; round < MAX_ROUNDS; round++) {
+      roundsUsed = round + 1;
       const stream = client.messages.stream({
-        model: params.model ?? DEFAULT_AGENT_MODEL,
+        model,
         max_tokens: MAX_TOKENS,
         // As with the tools' breakpoint: the system prompt is identical
         // across rounds, so later rounds read it from cache.
@@ -124,7 +212,7 @@ export async function runAgentLoop(params: {
           },
         ],
         tools,
-        messages,
+        messages: withHistoryCacheBreakpoint(messages, history.length),
       });
 
       stream.on("streamEvent", (event) => {
@@ -138,21 +226,32 @@ export async function runAgentLoop(params: {
 
       const response = await stream.finalMessage();
 
+      usage.inputTokens += response.usage.input_tokens ?? 0;
+      usage.outputTokens += response.usage.output_tokens ?? 0;
+      usage.cacheReadTokens += response.usage.cache_read_input_tokens ?? 0;
+      usage.cacheWriteTokens += response.usage.cache_creation_input_tokens ?? 0;
+
+      if (response.content.some((block) => block.type === "text")) producedText = true;
+
       const toolUseBlocks = response.content.filter(
         (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
       );
 
       messages.push({ role: "assistant", content: response.content });
+      turn.push({ role: "assistant", content: response.content });
 
       if (toolUseBlocks.length === 0) {
         emit({ type: "done" });
-        return;
+        // No tool call and no view: the model answered the question in
+        // prose, which is a legitimate ending, not a failure to build.
+        return finish(producedText ? "answered" : "exhausted_rounds");
       }
 
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
       let createdView: { viewId: string; name: string } | null = null;
 
       for (const block of toolUseBlocks) {
+        toolCalls++;
         emit({ type: "tool_call", name: block.name, input: block.input });
 
         const result = await executeTool(block.name, block.input, {
@@ -162,6 +261,7 @@ export async function runAgentLoop(params: {
           viewId,
         });
 
+        if (!result.ok) toolErrors++;
         emit({ type: "tool_result", name: block.name, ok: result.ok, summary: result.summary });
 
         toolResults.push({
@@ -177,22 +277,22 @@ export async function runAgentLoop(params: {
       }
 
       messages.push({ role: "user", content: toolResults });
+      turn.push({ role: "user", content: toolResults });
 
       if (createdView) {
         emit({ type: "view_created", viewId: createdView.viewId, name: createdView.name });
         emit({ type: "done" });
-        return;
+        return finish("view_created", { viewId: createdView.viewId });
       }
     }
 
-    emit({
-      type: "error",
-      message: "Reached the maximum number of tool calls without proposing a view.",
-    });
+    const exhausted = "Reached the maximum number of tool calls without proposing a view.";
+    emit({ type: "error", message: exhausted });
+    return finish("exhausted_rounds", { errorMessage: exhausted });
   } catch (error) {
-    emit({
-      type: "error",
-      message: error instanceof Error ? error.message : "Something went wrong talking to Claude.",
-    });
+    const message_ =
+      error instanceof Error ? error.message : "Something went wrong talking to Claude.";
+    emit({ type: "error", message: message_ });
+    return finish("error", { errorMessage: message_ });
   }
 }

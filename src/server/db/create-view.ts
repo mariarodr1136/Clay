@@ -1,6 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "./client";
 import { views, viewVersions, type ViewVersionCreator } from "./schema";
+import { activeView } from "./view-access";
+import { NotFoundError } from "@/server/errors";
 import type { ViewInput } from "@/lib/dsl/schema";
 
 // Single persistence path for a new view, used by both the manual "create
@@ -61,10 +63,10 @@ export async function patchView(params: {
 }) {
   return db.transaction(async (tx) => {
     const view = await tx.query.views.findFirst({
-      where: and(eq(views.id, params.viewId), eq(views.organizationId, params.organizationId)),
+      where: activeView(params.viewId, params.organizationId),
     });
     if (!view) {
-      throw new Error("View not found");
+      throw new NotFoundError("View");
     }
 
     // A patch can never change publish state as a side effect — the stored

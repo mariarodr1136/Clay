@@ -3,9 +3,12 @@ import { and, eq } from "drizzle-orm";
 import { auth } from "@clerk/nextjs/server";
 import { ensureUserOrg } from "@/server/auth/ensure-user-org";
 import { db } from "@/server/db/client";
-import { projects, views } from "@/server/db/schema";
+import { projects } from "@/server/db/schema";
+import { activeView } from "@/server/db/view-access";
 import { runAgentLoop, type AgentEvent } from "@/server/agent/loop";
 import { checkRateLimit } from "@/server/agent/rate-limit";
+import { appendTurn, loadThreadHistory, resolveThread } from "@/server/agent/threads";
+import { recordAgentRun } from "@/server/agent/telemetry";
 import { agentModelIds } from "@/lib/agent-models";
 
 const bodySchema = z
@@ -13,6 +16,9 @@ const bodySchema = z
     message: z.string().min(1).max(2000),
     projectId: z.string().uuid().optional(),
     viewId: z.string().uuid().optional(),
+    // Omitted on the first message of a conversation; the response's
+    // thread_started event tells the client what to send from then on.
+    threadId: z.string().uuid().optional(),
     // Allow-listed — an arbitrary model string never reaches the SDK.
     model: z.enum(agentModelIds).optional(),
   })
@@ -52,7 +58,7 @@ export async function POST(req: Request) {
   }
 
   const { organizationId, userId } = await ensureUserOrg();
-  const { message, projectId, viewId, model } = parsed.data;
+  const { message, projectId, viewId, model, threadId } = parsed.data;
 
   let viewName: string | undefined;
 
@@ -67,13 +73,31 @@ export async function POST(req: Request) {
 
   if (viewId) {
     const view = await db.query.views.findFirst({
-      where: and(eq(views.id, viewId), eq(views.organizationId, organizationId)),
+      where: activeView(viewId, organizationId),
     });
     if (!view) {
       return Response.json({ error: "View not found" }, { status: 404 });
     }
     viewName = view.name;
   }
+
+  // Resolved before the stream opens so a bad thread id fails as a clean
+  // JSON error rather than mid-stream.
+  let thread: Awaited<ReturnType<typeof resolveThread>>;
+  try {
+    thread = await resolveThread({
+      threadId,
+      organizationId,
+      userId,
+      projectId,
+      viewId,
+      message,
+    });
+  } catch {
+    return Response.json({ error: "Conversation not found" }, { status: 404 });
+  }
+
+  const history = threadId ? await loadThreadHistory(thread.id) : [];
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -82,7 +106,9 @@ export async function POST(req: Request) {
         controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
       };
       try {
-        await runAgentLoop({
+        emit({ type: "thread_started", threadId: thread.id });
+
+        const result = await runAgentLoop({
           apiKey,
           organizationId,
           userId,
@@ -91,8 +117,32 @@ export async function POST(req: Request) {
           viewName,
           message,
           model,
+          history,
           emit,
         });
+
+        // Persistence happens after the stream has delivered everything, so
+        // a slow write never delays the user's last token. Neither failure
+        // is worth breaking the response over: the user already has their
+        // answer, so a lost turn or lost telemetry row is logged and
+        // swallowed rather than surfaced as an error.
+        try {
+          await appendTurn(thread.id, result.turn);
+        } catch (error) {
+          console.error("[agent] failed to persist conversation turn", error);
+        }
+
+        try {
+          await recordAgentRun({
+            organizationId,
+            userId,
+            threadId: thread.id,
+            isRefinement: Boolean(viewId),
+            result,
+          });
+        } catch (error) {
+          console.error("[agent] failed to record run telemetry", error);
+        }
       } finally {
         controller.close();
       }

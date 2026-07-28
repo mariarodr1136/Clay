@@ -5,6 +5,7 @@ import { db } from "@/server/db/client";
 import { tasks, taskStatuses, taskPriorities } from "@/server/db/schema";
 import { runCatalogQuery } from "@/server/data-access/catalog";
 import { runCatalogMutation } from "@/server/data-access/mutations";
+import { NotFoundError } from "@/server/errors";
 
 export const tasksRouter = router({
   listByProject: protectedProcedure
@@ -80,7 +81,7 @@ export const tasksRouter = router({
         .set({ ...rest, updatedAt: new Date() })
         .where(and(eq(tasks.id, id), eq(tasks.organizationId, ctx.organizationId)))
         .returning();
-      if (!task) throw new Error("Task not found");
+      if (!task) throw new NotFoundError("Task");
       return task;
     }),
 

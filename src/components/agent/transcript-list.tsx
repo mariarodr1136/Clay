@@ -21,6 +21,13 @@ export function TranscriptList({
   return (
     <div className="space-y-2 border-t pt-4">
       {items.map((item, i) => {
+        if (item.kind === "user") {
+          return (
+            <p key={i} className="text-foreground pt-2 text-sm font-medium first:pt-0">
+              {item.text}
+            </p>
+          );
+        }
         if (item.kind === "text") {
           return (
             <p key={i} className="text-sm">

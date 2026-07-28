@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { format, formatDistanceToNow, isToday, isYesterday } from "date-fns";
-import { Bot, GitBranch, History, Pencil, UserRound } from "lucide-react";
+import { Bot, GitBranch, History, ListChecks, Pencil, UserRound } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -100,9 +100,88 @@ function AuditEntry({ entry }: { entry: ActivityEntry }) {
   );
 }
 
+type WorkEntry = {
+  id: string;
+  verb: string;
+  actor: string | null;
+  task: string | null;
+  taskId: string;
+  at: string | Date;
+};
+
+const VERB_META: Record<string, { label: string; colorVar: string }> = {
+  "task.created": { label: "Created task", colorVar: "--status-todo" },
+  "task.status_changed": { label: "Moved task", colorVar: "--status-in-progress" },
+  "task.assigned": { label: "Assigned task", colorVar: "--status-in-review" },
+  "task.due_date_changed": { label: "Rescheduled task", colorVar: "--status-done" },
+};
+
+// The work feed reads through the same allow-listed catalog the agent and
+// every widget use (views.runQuery), rather than a bespoke procedure — so
+// the audit page is one more consumer of the choke point, not an exception
+// to it.
+function WorkActivityFeed() {
+  const workQuery = trpc.views.runQuery.useQuery({
+    queryId: "recentActivity",
+    params: { days: 30, limit: 100 },
+  });
+
+  const entries = (workQuery.data ?? []) as WorkEntry[];
+
+  if (workQuery.isLoading) {
+    return <p className="text-muted-foreground text-sm">Loading…</p>;
+  }
+
+  if (entries.length === 0) {
+    return (
+      <div className="border-border flex flex-col items-center gap-3 rounded-3xl border border-dashed py-16 text-center">
+        <div className="bg-muted flex size-11 items-center justify-center rounded-full">
+          <ListChecks className="text-muted-foreground size-5" />
+        </div>
+        <p className="text-sm font-medium">No task activity in the last 30 days</p>
+        <p className="text-muted-foreground max-w-xs text-sm">
+          Creating tasks, moving them between columns, and assigning owners all show up here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <Card className="py-5">
+      <CardContent className="space-y-4">
+        {entries.map((entry) => {
+          const meta = VERB_META[entry.verb] ?? {
+            label: entry.verb,
+            colorVar: "--status-todo",
+          };
+          const when = new Date(entry.at);
+          return (
+            <div key={entry.id} className="flex items-baseline gap-2.5 text-sm">
+              <span
+                className="size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: `var(${meta.colorVar})` }}
+              />
+              <span className="font-medium">{entry.actor ?? "Someone"}</span>
+              <span className="text-muted-foreground">{meta.label.toLowerCase()}</span>
+              <span className="truncate font-medium">{entry.task ?? "a deleted task"}</span>
+              <span
+                className="text-muted-foreground ml-auto shrink-0 text-xs"
+                title={when.toLocaleString()}
+              >
+                {formatDistanceToNow(when, { addSuffix: true })}
+              </span>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AuditPage() {
   const activityQuery = trpc.views.listActivity.useQuery({ limit: 100 });
   const [actorFilter, setActorFilter] = useState<"agent" | "user" | null>(null);
+  const [tab, setTab] = useState<"views" | "work">("views");
 
   const all = (activityQuery.data ?? []) as ActivityEntry[];
   const entries = actorFilter ? all.filter((e) => e.createdBy === actorFilter) : all;
@@ -133,9 +212,41 @@ export default function AuditPage() {
         </p>
       </div>
 
-      {activityQuery.isLoading && <p className="text-muted-foreground text-sm">Loading…</p>}
+      <div
+        role="tablist"
+        aria-label="Audit scope"
+        className="bg-muted inline-flex gap-1 rounded-full p-1"
+      >
+        {(
+          [
+            ["views", "View changes"],
+            ["work", "Task activity"],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            role="tab"
+            aria-selected={tab === value}
+            onClick={() => setTab(value)}
+            className={cn(
+              "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+              tab === value
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-      {activityQuery.data && all.length === 0 && (
+      {tab === "work" && <WorkActivityFeed />}
+
+      {tab === "views" && activityQuery.isLoading && (
+        <p className="text-muted-foreground text-sm">Loading…</p>
+      )}
+
+      {tab === "views" && activityQuery.data && all.length === 0 && (
         <div className="border-border flex flex-col items-center gap-3 rounded-3xl border border-dashed py-16 text-center">
           <div className="bg-muted flex size-11 items-center justify-center rounded-full">
             <History className="text-muted-foreground size-5" />
@@ -147,7 +258,7 @@ export default function AuditPage() {
         </div>
       )}
 
-      {all.length > 0 && (
+      {tab === "views" && all.length > 0 && (
         <>
           <div className="grid grid-cols-3 gap-4">
             <StatTile label="Events" value={String(all.length)} sub="most recent 100" />

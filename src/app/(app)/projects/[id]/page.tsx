@@ -12,6 +12,7 @@ import { trpc } from "@/lib/trpc/client";
 import { taskPriorities, taskStatuses } from "@/server/db/schema";
 import { statusMeta } from "@/lib/task-display";
 import { StatusBadge, PriorityBadge } from "@/components/task-badges";
+import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +78,7 @@ export default function ProjectPage() {
   const utils = trpc.useUtils();
   const [open, setOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<(typeof taskStatuses)[number] | null>(null);
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 
   const project = trpc.projects.get.useQuery({ id: projectId });
   const tasksQuery = trpc.tasks.listByProject.useQuery({ projectId });
@@ -306,7 +308,15 @@ export default function ProjectPage() {
                 : tasksQuery.data
               ).map((task) => (
                 <TableRow key={task.id} className="group/row">
-                  <TableCell className="font-medium">{task.title}</TableCell>
+                  <TableCell className="font-medium">
+                    <button
+                      type="button"
+                      className="hover:underline"
+                      onClick={() => setDetailTaskId(task.id)}
+                    >
+                      {task.title}
+                    </button>
+                  </TableCell>
                   <TableCell>
                     <Select
                       value={task.status}
@@ -371,6 +381,11 @@ export default function ProjectPage() {
           </Button>
         </div>
       )}
+
+      <TaskDetailDialog
+        taskId={detailTaskId}
+        onOpenChange={(open) => !open && setDetailTaskId(null)}
+      />
     </div>
   );
 }

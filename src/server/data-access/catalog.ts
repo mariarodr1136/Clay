@@ -15,7 +15,10 @@ import { createdVsCompleted, createdVsCompletedParams } from "./queries/created-
 import { cycleTimeByWeek, cycleTimeByWeekParams } from "./queries/cycle-time-by-week";
 import { agingWip, agingWipParams } from "./queries/aging-wip";
 import { pointsByProject, pointsByProjectParams } from "./queries/points-by-project";
+import { recentActivity, recentActivityParams } from "./queries/recent-activity";
+import { activityByUser, activityByUserParams } from "./queries/activity-by-user";
 import { EXPORT_ROW_LIMIT, INTERACTIVE_ROW_LIMIT } from "./limits";
+import { InvalidRequestError } from "@/server/errors";
 
 type CatalogEntry = {
   description: string;
@@ -119,6 +122,19 @@ export const queryCatalog = {
     paramsSchema: pointsByProjectParams,
     run: pointsByProject,
   },
+  recentActivity: {
+    description:
+      "Recent task activity ({ verb, actor, task, taskId, at }) over the last N days (default 14), newest first — who did what; ideal for an activity-feed table.",
+    paramsSchema: recentActivityParams,
+    run: recentActivity,
+    exportRowLimit: EXPORT_ROW_LIMIT,
+  },
+  activityByUser: {
+    description:
+      "Per-person activity counts over the last N days (default 30) ({ actor, created, statusChanges, assignments, total }) — who is moving work; ideal for a stackedBar chart with xField 'actor'.",
+    paramsSchema: activityByUserParams,
+    run: activityByUser,
+  },
 } satisfies Record<string, CatalogEntry>;
 
 export type QueryCatalogKey = keyof typeof queryCatalog;
@@ -148,7 +164,7 @@ export function clampInteractiveParams(rawParams: unknown): unknown {
 export async function runCatalogQuery(organizationId: string, queryId: string, rawParams: unknown) {
   const entry = queryCatalog[queryId as QueryCatalogKey];
   if (!entry) {
-    throw new Error(`Unknown query catalog id: ${queryId}`);
+    throw new InvalidRequestError(`Unknown query catalog id: ${queryId}`);
   }
   const params = entry.paramsSchema.parse(clampInteractiveParams(rawParams ?? {}));
   return entry.run(organizationId, params as never);
@@ -172,7 +188,7 @@ export async function runCatalogQueryForExport(
 ): Promise<CatalogExportResult> {
   const entry: CatalogEntry | undefined = queryCatalog[queryId as QueryCatalogKey];
   if (!entry) {
-    throw new Error(`Unknown query catalog id: ${queryId}`);
+    throw new InvalidRequestError(`Unknown query catalog id: ${queryId}`);
   }
   const rowLimit = entry.exportRowLimit ?? null;
 

@@ -5,6 +5,7 @@ import { db } from "@/server/db/client";
 import { projects, tasks } from "@/server/db/schema";
 import { seedDemoData } from "@/server/db/seed-demo-data";
 import { seedDemoViews } from "@/server/db/seed-demo-views";
+import { ConflictError, NotFoundError } from "@/server/errors";
 
 export const projectsRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -43,7 +44,9 @@ export const projectsRouter = router({
       where: eq(projects.organizationId, ctx.organizationId),
     });
     if (existing) {
-      throw new Error("This workspace already has projects — sample data is only for empty workspaces.");
+      throw new ConflictError(
+        "This workspace already has projects — sample data is only for empty workspaces."
+      );
     }
     const project = await seedDemoData(ctx.organizationId, ctx.userId);
     await seedDemoViews(ctx.organizationId, ctx.userId, project.id);
@@ -56,7 +59,7 @@ export const projectsRouter = router({
       const project = await db.query.projects.findFirst({
         where: and(eq(projects.id, input.id), eq(projects.organizationId, ctx.organizationId)),
       });
-      if (!project) throw new Error("Project not found");
+      if (!project) throw new NotFoundError("Project");
       return project;
     }),
 
