@@ -12,7 +12,8 @@
     "db:studio": "drizzle-kit studio",
     "test": "vitest run",
     "db:migrate": "drizzle-kit migrate",
-    "test:e2e": "node scripts/run-e2e.mjs"
+    "test:e2e": "node scripts/run-e2e.mjs",
+    "evals": "node scripts/run-evals.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.113.0",

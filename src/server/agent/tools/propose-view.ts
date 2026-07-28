@@ -1,4 +1,5 @@
 import { queryCatalog } from "@/server/data-access/catalog";
+import { viewErrors } from "@/lib/dsl/quality";
 import { createView, patchView } from "@/server/db/create-view";
 import type { proposeViewInputSchema } from "./schemas";
 import type { z } from "zod";
@@ -39,6 +40,15 @@ export async function proposeViewTool(
   const errors = invalidDataBindings(input.schema);
   if (errors.length > 0) {
     return { ok: false, error: errors.join(" | ") };
+  }
+
+  // Structural quality, checked here rather than in the schema on purpose:
+  // rejecting a *proposal* that would render broken gives the agent feedback
+  // it can act on, while views already in the database keep parsing and
+  // rendering. Zod says "well-formed"; this says "usable".
+  const quality = viewErrors(input.schema);
+  if (quality.length > 0) {
+    return { ok: false, error: quality.map((problem) => problem.message).join(" | ") };
   }
 
   try {

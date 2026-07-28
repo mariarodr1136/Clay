@@ -1,6 +1,6 @@
 # Clay
 
-![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6) ![Next.js](https://img.shields.io/badge/Next.js_16-App_Router-000000) ![React](https://img.shields.io/badge/React_19-Frontend-61DAFB) ![tRPC](https://img.shields.io/badge/tRPC-11-2596BE) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Drizzle_ORM-4169E1) ![Claude](https://img.shields.io/badge/Claude-Agent_Loop-D97757) ![Vitest](https://img.shields.io/badge/Vitest-112_tests_+_e2e-6E9F18) ![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000)
+![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6) ![Next.js](https://img.shields.io/badge/Next.js_16-App_Router-000000) ![React](https://img.shields.io/badge/React_19-Frontend-61DAFB) ![tRPC](https://img.shields.io/badge/tRPC-11-2596BE) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Drizzle_ORM-4169E1) ![Claude](https://img.shields.io/badge/Claude-Agent_Loop-D97757) ![Vitest](https://img.shields.io/badge/Vitest-132_tests_+_e2e-6E9F18) ![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000)
 
 A project tracker where the UI isn't fixed. Describe the dashboard you need in plain language, and an agent built on the Claude API writes it — live, against your real projects and tasks, in seconds.
 
@@ -73,6 +73,7 @@ Instead of a fixed set of dashboards and a settings menu to configure them, Clay
 - **Read-only, allow-listed agent tools** — the agent never writes SQL or touches the database directly. Its only read path is a fixed catalog of org-scoped queries (`tasksList`, `statusByProject`, `velocityByWeek`, `cycleTimeByWeek`, `createdVsCompleted`, `agingWip`, `pointsByProject`, `overdueTasks`, `upcomingTasks`, `completionsOverTime`, etc.), and every tool call is validated against a Zod schema before it runs.
 - **Bring-your-own-key** — the chat UI takes your own Anthropic API key, held only in the browser tab and sent per-request; there's no server-side key to leak or bill against.
 - **Full audit trail** — every view created or changed in an organization shows up in the audit log, whether it was the agent or a person.
+- **Graded agent evals** — a case set pins what "good" means: does a request produce a view at all, does it bind to the right catalog query, does it answer in prose when asked a question instead of forcing a dashboard, does a refinement carry existing widgets over instead of dropping them. Structural quality is checked too — overlapping widgets, a widget running past the 12-column grid, a donut with no donut config — and `propose_view` now rejects those before persisting, so the agent gets feedback it can act on. The grader and those rules are unit tested on every commit; the live half runs on demand against a real model.
 - **Adversarial test coverage** — a dedicated security suite asserts the agent can never escalate a view to org-wide scope, can't reference an unknown widget type or catalog id, and can't write across an organization boundary even with a version id from the wrong org.
 - **Rate-limited by design** — 10 agent requests per 5-minute window per user, enforced server-side ahead of any Anthropic call, with the window state in Postgres so it holds across serverless instances and deploys. Demo workspace creation has its own, wider per-IP budget, because an IP is not a person.
 - **Real projects and tasks underneath** — a standard project/task tracker (status, priority, due dates, assignees, comments) sits under the generated-view layer, so there's always real data for views to bind to.
@@ -147,6 +148,7 @@ Two notes on PDF export specifically:
 | `npm run dev` | Runs the Next.js dev server (Turbopack) |
 | `npm test` | Vitest suite — unit tests plus adversarial agent-security tests |
 | `npm run test:e2e` | Builds, then drives the real app in headless Chrome through `/demo` (pages, layout editor, writes, exports) |
+| `npm run evals` | Live agent evals — real Claude calls, graded. Needs `ANTHROPIC_API_KEY`; not part of `npm test` |
 | `npm run lint` | ESLint across the project |
 | `npm run build` | Production build |
 | `npm run db:push` | Push the Drizzle schema straight to Postgres (dev convenience) |
