@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { taskPriorities, taskStatuses, type TaskPriority, type TaskStatus } from "@/server/db/schema";
 import { IMPORT_FIELDS, type ImportField } from "@/lib/import-fields";
+import { excelSerialToIsoDate } from "./parse-xlsx";
 import type { ParsedCsv } from "./parse-csv";
 
 // The task fields an import can populate — the same set the createTask
@@ -130,12 +131,30 @@ export type MappedImport = {
   problems: RowProblem[];
 };
 
+// Excel stores dates as days since 1899-12-30, so a real date cell arrives
+// as a bare number like 46200. The range is bounded deliberately: 20000 is
+// 1954 and 60000 is 2064, which is narrow enough that a genuine numeric
+// value in a date column (a duration, an ID) is unlikely to be inside it and
+// wide enough to cover any date anyone puts on a task.
+const EXCEL_SERIAL_MIN = 20_000;
+const EXCEL_SERIAL_MAX = 60_000;
+
 function parseDate(raw: string): string | undefined {
   const trimmed = raw.trim();
   if (!trimmed) return undefined;
 
   // Already ISO (YYYY-MM-DD) — the format our own export writes.
   if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+
+  if (/^\d+(\.\d+)?$/.test(trimmed)) {
+    const serial = Number(trimmed);
+    if (serial >= EXCEL_SERIAL_MIN && serial <= EXCEL_SERIAL_MAX) {
+      return excelSerialToIsoDate(serial);
+    }
+    // A number outside that window is not a date anyone meant; falling
+    // through to Date would read "5" as 2001-05-01.
+    return undefined;
+  }
 
   // Anything else goes through Date, which handles "Mar 3, 2026" and
   // "2026/03/03". Ambiguous US-vs-EU numeric dates are the one case nothing

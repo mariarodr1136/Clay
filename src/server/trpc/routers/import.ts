@@ -4,12 +4,26 @@ import { router, protectedProcedure } from "../trpc";
 import { db } from "@/server/db/client";
 import { memberships, projects, tasks, users } from "@/server/db/schema";
 import { parseCsv, CsvParseError, MAX_IMPORT_ROWS } from "@/server/import/parse-csv";
+import { parseXlsx } from "@/server/import/parse-xlsx";
 import { mapRowsToTasks, mappingSchema, suggestMapping } from "@/server/import/map-tasks";
 import { InvalidRequestError, NotFoundError } from "@/server/errors";
 
-// 4 MB of text. The row cap is the real limit; this just stops a pathological
-// payload from being parsed at all.
+// 4 MB. The row cap is the real limit; this just stops a pathological
+// payload from being parsed at all. A workbook arrives base64-encoded, which
+// costs about a third in size, hence the slightly larger ceiling.
 const csvInput = z.string().min(1).max(4_000_000);
+const xlsxInput = z.string().min(1).max(6_000_000);
+
+// Either a pasted/uploaded CSV or a base64 .xlsx. Both parse to the same
+// shape, so column matching, validation and preview are shared.
+const fileInput = z
+  .object({
+    csv: csvInput.optional(),
+    xlsxBase64: xlsxInput.optional(),
+  })
+  .refine((input) => Boolean(input.csv) !== Boolean(input.xlsxBase64), {
+    message: "Provide exactly one of csv or xlsxBase64",
+  });
 
 async function ownProject(organizationId: string, projectId: string) {
   const project = await db.query.projects.findFirst({
@@ -19,9 +33,12 @@ async function ownProject(organizationId: string, projectId: string) {
   return project;
 }
 
-function parseOrThrow(csv: string) {
+function parseOrThrow(input: { csv?: string; xlsxBase64?: string }) {
   try {
-    return parseCsv(csv);
+    if (input.xlsxBase64) {
+      return parseXlsx(new Uint8Array(Buffer.from(input.xlsxBase64, "base64")));
+    }
+    return parseCsv(input.csv!);
   } catch (error) {
     if (error instanceof CsvParseError) throw new InvalidRequestError(error.message);
     throw error;
@@ -51,9 +68,9 @@ async function resolveAssignees(organizationId: string, names: string[]) {
 export const importRouter = router({
   // Reads the header row and guesses a mapping. Writes nothing.
   inspect: protectedProcedure
-    .input(z.object({ csv: csvInput }))
+    .input(fileInput)
     .mutation(async ({ input }) => {
-      const parsed = parseOrThrow(input.csv);
+      const parsed = parseOrThrow(input);
       return {
         headers: parsed.headers,
         rowCount: parsed.rows.length,
@@ -69,15 +86,16 @@ export const importRouter = router({
   // than one that refuses to start.
   preview: protectedProcedure
     .input(
-      z.object({
-        projectId: z.string().uuid(),
-        csv: csvInput,
-        mapping: mappingSchema,
-      })
+      z
+        .object({
+          projectId: z.string().uuid(),
+          mapping: mappingSchema,
+        })
+        .and(fileInput)
     )
     .mutation(async ({ ctx, input }) => {
       await ownProject(ctx.organizationId, input.projectId);
-      const parsed = parseOrThrow(input.csv);
+      const parsed = parseOrThrow(input);
       const { rows, problems } = mapRowsToTasks(parsed, input.mapping);
 
       const names = [...new Set(rows.flatMap((r) => (r.assigneeName ? [r.assigneeName] : [])))];
@@ -94,15 +112,16 @@ export const importRouter = router({
 
   commit: protectedProcedure
     .input(
-      z.object({
-        projectId: z.string().uuid(),
-        csv: csvInput,
-        mapping: mappingSchema,
-      })
+      z
+        .object({
+          projectId: z.string().uuid(),
+          mapping: mappingSchema,
+        })
+        .and(fileInput)
     )
     .mutation(async ({ ctx, input }) => {
       await ownProject(ctx.organizationId, input.projectId);
-      const parsed = parseOrThrow(input.csv);
+      const parsed = parseOrThrow(input);
       const { rows, problems } = mapRowsToTasks(parsed, input.mapping);
 
       if (rows.length === 0) {

@@ -44,16 +44,25 @@ export function ImportDialog({
   const fileInput = useRef<HTMLInputElement>(null);
 
   const [csv, setCsv] = useState("");
+  // Set instead of `csv` when the user picks a workbook. Exactly one of the
+  // two travels with every request.
+  const [xlsxBase64, setXlsxBase64] = useState<string | null>(null);
+  const [fileLabel, setFileLabel] = useState<string | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Mapping>({});
 
   const reset = () => {
     setCsv("");
+    setXlsxBase64(null);
+    setFileLabel(null);
     setHeaders([]);
     setMapping({});
     inspect.reset();
     preview.reset();
   };
+
+  // What every mutation needs to identify the uploaded file.
+  const source = () => (xlsxBase64 ? { xlsxBase64 } : { csv });
 
   const inspect = trpc.import.inspect.useMutation({
     onSuccess: (data) => {
@@ -83,7 +92,24 @@ export function ImportDialog({
   });
 
   const readFile = async (file: File) => {
+    setFileLabel(file.name);
+
+    if (/\.xlsx$/i.test(file.name)) {
+      // Base64 rather than multipart: the payload goes through the same
+      // tRPC procedure as pasted CSV, so there's one validated entry point
+      // instead of a second upload route to secure separately.
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      let binary = "";
+      for (const byte of bytes) binary += String.fromCharCode(byte);
+      const encoded = btoa(binary);
+      setCsv("");
+      setXlsxBase64(encoded);
+      inspect.mutate({ xlsxBase64: encoded });
+      return;
+    }
+
     const text = await file.text();
+    setXlsxBase64(null);
     setCsv(text);
     inspect.mutate({ csv: text });
   };
@@ -103,7 +129,8 @@ export function ImportDialog({
         <DialogHeader>
           <DialogTitle>Import tasks from a spreadsheet</DialogTitle>
           <DialogDescription>
-            Upload a CSV, or paste one below. Nothing is saved until you confirm the preview.
+            Upload a CSV or Excel file, or paste CSV below. Nothing is saved until you confirm the
+            preview.
           </DialogDescription>
         </DialogHeader>
 
@@ -112,7 +139,7 @@ export function ImportDialog({
             <input
               ref={fileInput}
               type="file"
-              accept=".csv,text/csv"
+              accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               className="sr-only"
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -127,7 +154,7 @@ export function ImportDialog({
               disabled={inspect.isPending}
             >
               <Upload data-icon="inline-start" />
-              Choose a CSV file
+              {fileLabel ?? "Choose a CSV or Excel file"}
             </Button>
 
             <div className="space-y-2">
@@ -243,7 +270,7 @@ export function ImportDialog({
               <Button
                 type="button"
                 disabled={!hasTitle || preview.isPending}
-                onClick={() => preview.mutate({ projectId, csv, mapping })}
+                onClick={() => preview.mutate({ projectId, mapping, ...source() })}
               >
                 {preview.isPending ? "Checking…" : "Preview import"}
               </Button>
@@ -251,7 +278,7 @@ export function ImportDialog({
               <Button
                 type="button"
                 disabled={commit.isPending || preview.data.willCreate === 0}
-                onClick={() => commit.mutate({ projectId, csv, mapping })}
+                onClick={() => commit.mutate({ projectId, mapping, ...source() })}
               >
                 {commit.isPending
                   ? "Importing…"
