@@ -1,6 +1,6 @@
 # Clay
 
-![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6) ![Next.js](https://img.shields.io/badge/Next.js_16-App_Router-000000) ![React](https://img.shields.io/badge/React_19-Frontend-61DAFB) ![tRPC](https://img.shields.io/badge/tRPC-11-2596BE) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Drizzle_ORM-4169E1) ![Claude](https://img.shields.io/badge/Claude-Agent_Loop-D97757) ![Vitest](https://img.shields.io/badge/Vitest-188_tests_+_e2e-6E9F18) ![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000)
+![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6) ![Next.js](https://img.shields.io/badge/Next.js_16-App_Router-000000) ![React](https://img.shields.io/badge/React_19-Frontend-61DAFB) ![tRPC](https://img.shields.io/badge/tRPC-11-2596BE) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Drizzle_ORM-4169E1) ![Claude](https://img.shields.io/badge/Claude-Agent_Loop-D97757) ![Vitest](https://img.shields.io/badge/Vitest-199_tests_+_e2e-6E9F18) ![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000)
 
 A project tracker where the UI isn't fixed. Describe the dashboard you need in plain language, and an agent built on the Claude API writes it — live, against your real projects and tasks, in seconds.
 
@@ -71,6 +71,7 @@ Instead of a fixed set of dashboards and a settings menu to configure them, Clay
 - **The demo is the product** — `/demo` doesn't render a mock. It provisions a real, seeded workspace behind a signed cookie and drops you into the ordinary app: same pages, same allow-listed catalog, same exports, same agent. Writes land in a real database and survive a reload; the whole tenant is swept after 24 hours by a cron. There is no second renderer to keep in sync, and nothing the demo shows is something the product can't do.
 - **Versioned, never overwritten** — every agent edit (and every manual one) writes a new `view_versions` row with a parent pointer, so a view's entire prompt/edit history is always recoverable.
 - **Read-only, allow-listed agent tools** — the agent never writes SQL or touches the database directly. Its only read path is a fixed catalog of org-scoped queries (`tasksList`, `statusByProject`, `velocityByWeek`, `cycleTimeByWeek`, `createdVsCompleted`, `agingWip`, `pointsByProject`, `overdueTasks`, `upcomingTasks`, `completionsOverTime`, etc.), and every tool call is validated against a Zod schema before it runs.
+- **Query Clay from your own assistant** — Clay speaks the Model Context Protocol. Issue a revocable API token under *Connect*, point Claude Desktop (or anything else that talks MCP) at `/api/mcp`, and it gets `describe_entities`, `list_queries`, and `run_query` over the very same allow-listed catalog Clay's own agent is restricted to. Read-only by construction: the mutation catalog is not exposed, because writes in Clay happen when a signed-in person clicks. A token names one workspace, frozen at creation, and only its hash is stored — it's shown once and unrecoverable after that.
 - **Bring-your-own-key** — the chat UI takes your own Anthropic API key, held only in the browser tab and sent per-request; there's no server-side key to leak or bill against.
 - **Full audit trail** — every view created or changed in an organization shows up in the audit log, whether it was the agent or a person.
 - **Graded agent evals** — a case set pins what "good" means: does a request produce a view at all, does it bind to the right catalog query, does it answer in prose when asked a question instead of forcing a dashboard, does a refinement carry existing widgets over instead of dropping them. Structural quality is checked too — overlapping widgets, a widget running past the 12-column grid, a donut with no donut config — and `propose_view` now rejects those before persisting, so the agent gets feedback it can act on. The grader and those rules are unit tested on every commit; the live half runs on demand against a real model.
@@ -194,7 +195,8 @@ Clay/
 │   │   └── api/
 │   │       ├── agent/route.ts        # Runs the Claude tool-use loop for a request
 │   │       ├── views/[viewId]/export/    # XLSX / CSV / PDF for a view
-│   │       ├── cron/sweep-guests/    # Deletes expired demo workspaces (hourly)
+│   │       ├── cron/sweep-guests/    # Deletes expired demo workspaces (daily)
+│   │       ├── mcp/route.ts          # Model Context Protocol server over the query catalog
 │   │       └── trpc/[trpc]/          # tRPC route handler
 │   ├── components/                   # UI primitives (shadcn/Radix), one renderer + widget set, agent + view components
 │   ├── fixtures/                     # Sample-workspace view fixtures (seeded into new and demo workspaces)

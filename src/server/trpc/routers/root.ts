@@ -6,6 +6,7 @@ import { membersRouter } from "./members";
 import { projectsRouter } from "./projects";
 import { searchRouter } from "./search";
 import { tasksRouter } from "./tasks";
+import { tokensRouter } from "./tokens";
 import { viewsRouter } from "./views";
 
 export const appRouter = router({
@@ -16,6 +17,7 @@ export const appRouter = router({
   projects: projectsRouter,
   search: searchRouter,
   tasks: tasksRouter,
+  tokens: tokensRouter,
   views: viewsRouter,
 });
 

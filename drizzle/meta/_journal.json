@@ -43,6 +43,13 @@
       "when": 1785278587995,
       "tag": "0005_guest-workspaces",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785282097429,
+      "tag": "0006_api-tokens",
+      "breakpoints": true
     }
   ]
 }
