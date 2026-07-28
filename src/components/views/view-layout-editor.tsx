@@ -64,6 +64,10 @@ export function ViewLayoutEditor({
       <GridLayoutEditor
         layout={layout}
         onChange={setLayout}
+        widgetLabel={(id) => {
+          const widget = widgetsById.get(id);
+          return widget?.title ?? widget?.type ?? id;
+        }}
         renderWidget={(id) => {
           const widget = widgetsById.get(id);
           if (!widget) return null;

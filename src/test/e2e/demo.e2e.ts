@@ -109,6 +109,60 @@ describe("demo smoke", () => {
     await page.close();
   });
 
+  it("lets the keyboard move and resize widgets in the layout editor", async () => {
+    const page = await browser.newPage();
+    await openAndExpect(page, "/demo/views/demo-view-delivery-overview", ["Edit layout"]);
+
+    await page.evaluate(() => {
+      const button = [...document.querySelectorAll("button")].find((b) =>
+        b.textContent?.includes("Edit layout")
+      );
+      button?.click();
+    });
+    await page.waitForFunction(() => document.body.innerText.includes("Save layout"), {
+      timeout: 15_000,
+    });
+
+    // Widget handles expose their geometry in the accessible name, so the
+    // assertion reads exactly what a screen-reader user would be told.
+    const handleSelector = 'button[aria-label*="Arrow keys move"]';
+    await page.waitForSelector(handleSelector, { timeout: 15_000 });
+
+    const labelOf = () =>
+      page.$eval(handleSelector, (el) => el.getAttribute("aria-label") ?? "");
+
+    const before = await labelOf();
+    await page.focus(handleSelector);
+
+    await page.keyboard.press("ArrowRight");
+    await page.waitForFunction(
+      (selector, previous) =>
+        document.querySelector(selector)?.getAttribute("aria-label") !== previous,
+      { timeout: 5_000 },
+      handleSelector,
+      before
+    );
+    const afterMove = await labelOf();
+    expect(afterMove).not.toBe(before);
+
+    await page.keyboard.down("Shift");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.up("Shift");
+    await page.waitForFunction(
+      (selector, previous) =>
+        document.querySelector(selector)?.getAttribute("aria-label") !== previous,
+      { timeout: 5_000 },
+      handleSelector,
+      afterMove
+    );
+
+    // Shift+Arrow resizes rather than moves, so the height in the label grew.
+    const heightOf = (label: string) => Number(/(\d+) by (\d+)/.exec(label)?.[2] ?? 0);
+    expect(heightOf(await labelOf())).toBe(heightOf(afterMove) + 1);
+
+    await page.close();
+  });
+
   it("renders status-action dropdowns on the workload table", async () => {
     const page = await browser.newPage();
     await openAndExpect(page, "/demo/views/demo-view-team-workload", ["Open tasks"]);

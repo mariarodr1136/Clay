@@ -52,6 +52,13 @@ export function DemoLayoutEditor({
         layout={layout}
         onChange={setLayout}
         rowHeight={96}
+        widgetLabel={(id) => {
+          // The demo's filterBar variant carries no title, so fall back to
+          // the widget type rather than narrowing the union at every call.
+          const widget = widgetsById.get(id);
+          if (!widget) return id;
+          return ("title" in widget ? widget.title : undefined) ?? widget.type;
+        }}
         renderWidget={(id) => {
           const widget = widgetsById.get(id);
           if (!widget) return null;
