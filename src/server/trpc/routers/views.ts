@@ -99,7 +99,9 @@ export const viewsRouter = router({
   runQuery: protectedProcedure
     .input(z.object({ queryId: z.string(), params: z.record(z.string(), z.unknown()).default({}) }))
     .query(async ({ ctx, input }) => {
-      return runCatalogQuery(ctx.organizationId, input.queryId, input.params);
+      // ctx.queryMemo is per HTTP request, so a dashboard whose widgets
+      // share a binding runs that query once for the whole batch.
+      return runCatalogQuery(ctx.organizationId, input.queryId, input.params, ctx.queryMemo);
     }),
 
   // The write-side twin of runQuery: mutation-bound widgets (task forms,

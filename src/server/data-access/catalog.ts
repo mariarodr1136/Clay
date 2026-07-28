@@ -158,16 +158,68 @@ export function clampInteractiveParams(rawParams: unknown): unknown {
   return { ...params, limit: INTERACTIVE_ROW_LIMIT };
 }
 
+// A per-request memo, created fresh in the tRPC context and shared by every
+// procedure in one batched HTTP request.
+//
+// The problem it solves: a dashboard routinely binds several widgets to the
+// same query — three KPI tiles over tasksList, a chart and a table over
+// overdueTasks — and the client batches those into a single request, where
+// they otherwise become that many identical round trips to Postgres.
+//
+// React's cache() is the obvious tool and does not work here: measured
+// against the built app, three identical queries in one tRPC batch produced
+// three database hits, because a Route Handler isn't a render scope. Passing
+// an explicit Map is uglier and verifiably correct.
+//
+// Deliberately request-scoped rather than a cross-request cache. These are
+// live dashboards over data the same user is editing, so serving a stale
+// count is a worse failure than running the query again — and a cross-request
+// `use cache` would mean enabling Cache Components app-wide, changing
+// rendering semantics far beyond this file.
+export type QueryMemo = Map<string, Promise<unknown>>;
+
+export function createQueryMemo(): QueryMemo {
+  return new Map();
+}
+
+// Sorted keys so two equivalent param objects produce one entry.
+function stableParamsJson(params: unknown): string {
+  if (!params || typeof params !== "object" || Array.isArray(params)) return JSON.stringify(params);
+  const record = params as Record<string, unknown>;
+  return JSON.stringify(Object.fromEntries(Object.keys(record).sort().map((k) => [k, record[k]])));
+}
+
 // Indexed directly (rather than through a helper returning CatalogEntry) so
 // the return type stays the precise union of the catalog's own row types —
 // that inference is what gives tRPC clients typed widget data.
-export async function runCatalogQuery(organizationId: string, queryId: string, rawParams: unknown) {
+export async function runCatalogQuery(
+  organizationId: string,
+  queryId: string,
+  rawParams: unknown,
+  memo?: QueryMemo
+) {
   const entry = queryCatalog[queryId as QueryCatalogKey];
   if (!entry) {
     throw new InvalidRequestError(`Unknown query catalog id: ${queryId}`);
   }
+  // Parsed before the key is built so defaults and clamping land *inside*
+  // it — otherwise {} and { limit: 50 } would miss each other despite being
+  // the same query.
   const params = entry.paramsSchema.parse(clampInteractiveParams(rawParams ?? {}));
-  return entry.run(organizationId, params as never);
+  if (!memo) return entry.run(organizationId, params as never);
+
+  // organizationId is part of the key, so a memo can never hand one org's
+  // rows to another even if one were somehow shared across requests.
+  const key = `${organizationId}|${queryId}|${stableParamsJson(params)}`;
+  const existing = memo.get(key);
+  if (existing) return existing;
+
+  // The promise is stored, not the resolved value, so widgets that ask
+  // concurrently share one in-flight query rather than racing to start
+  // several before the first returns.
+  const pending = entry.run(organizationId, params as never);
+  memo.set(key, pending);
+  return pending;
 }
 
 export type CatalogExportResult = {

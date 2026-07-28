@@ -26,8 +26,8 @@ export const tasksRouter = router({
     .input(z.object({ projectId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const [statusCounts, overdue] = await Promise.all([
-        runCatalogQuery(ctx.organizationId, "tasksByStatusCount", { projectId: input.projectId }),
-        runCatalogQuery(ctx.organizationId, "overdueTasks", { projectId: input.projectId, limit: 5 }),
+        runCatalogQuery(ctx.organizationId, "tasksByStatusCount", { projectId: input.projectId }, ctx.queryMemo),
+        runCatalogQuery(ctx.organizationId, "overdueTasks", { projectId: input.projectId, limit: 5 }, ctx.queryMemo),
       ]);
       return {
         statusCounts: statusCounts as { status: string; count: number }[],

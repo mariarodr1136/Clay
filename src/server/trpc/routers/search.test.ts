@@ -4,6 +4,7 @@ import { db } from "@/server/db/client";
 import { organizations, users, projects, tasks, views } from "@/server/db/schema";
 import { createView } from "@/server/db/create-view";
 import { appRouter } from "./root";
+import { createQueryMemo } from "@/server/data-access/catalog";
 import type { ViewInput } from "@/lib/dsl/schema";
 
 const schema: ViewInput = {
@@ -20,7 +21,13 @@ describe("command palette search", () => {
   let trashedViewId: string;
 
   const caller = (organizationId: string) =>
-    appRouter.createCaller({ userId: user.id, organizationId, role: "owner" as const, isGuest: false });
+    appRouter.createCaller({
+      userId: user.id,
+      organizationId,
+      role: "owner" as const,
+      isGuest: false,
+      queryMemo: createQueryMemo(),
+    });
 
   beforeAll(async () => {
     [orgA] = await db.insert(organizations).values({ name: "Search Org A" }).returning();

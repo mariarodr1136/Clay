@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { organizations, users, projects, tasks, type MembershipRole } from "@/server/db/schema";
 import { appRouter } from "./root";
+import { createQueryMemo } from "@/server/data-access/catalog";
 
 // Comments introduce two new authorization boundaries: a task id from
 // another org must not resolve, and deleting is gated on authorship rather
@@ -15,7 +16,7 @@ describe("comments authorization", () => {
   let taskInA: typeof tasks.$inferSelect;
 
   const caller = (userId: string, organizationId: string, role: MembershipRole = "owner") =>
-    appRouter.createCaller({ userId, organizationId, role, isGuest: false });
+    appRouter.createCaller({ userId, organizationId, role, isGuest: false, queryMemo: createQueryMemo() });
 
   beforeAll(async () => {
     [orgA] = await db.insert(organizations).values({ name: "Comments Org A" }).returning();
