@@ -3,7 +3,7 @@ import { projects, tasks, activityLog } from "./schema";
 
 // Realistic starter data for a brand-new organization, so a fresh sign-up
 // immediately sees a credible "before" app instead of an empty screen.
-export async function seedDemoData(organizationId: string, userId: string) {
+export async function seedSampleData(organizationId: string, userId: string) {
   const [project] = await db
     .insert(projects)
     .values({

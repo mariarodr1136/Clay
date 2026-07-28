@@ -20,12 +20,11 @@ env:
   # publishable key decodes to "example.clerk.accounts.dev$", the shape Clerk
   # expects.
   #
-  # The e2e suite runs here too. It used to be local-only because every page
-  # loaded Clerk's frontend bundle from the root layout, which throwaway keys
-  # can't serve. ClerkProvider is now mounted only on the signed-in app and
-  # the sign-in/sign-up pages, and /demo, /share, /print and /health are
-  # excluded from the auth middleware — so the public surface the e2e suite
-  # drives never touches Clerk at all.
+  # The e2e suite runs here too, and it now drives the real app: /demo hands
+  # out a throwaway workspace behind a signed cookie, and the middleware
+  # skips Clerk entirely for those requests. So the suite exercises the same
+  # pages a customer uses, without an auth provider that throwaway keys
+  # can't stand up.
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
   CLERK_SECRET_KEY: sk_test_ci_dummy_value_not_a_real_secret
 
@@ -98,9 +97,9 @@ jobs:
     name: Demo e2e (headless Chrome)
     runs-on: ubuntu-latest
 
-    # The demo renders from fixtures, but the app still boots a database
-    # client, and the export routes it exercises go through the same code
-    # path as the real ones.
+    # A demo visit provisions a real workspace and seeds it, so this suite
+    # genuinely needs a database — it asserts that a task created in the
+    # browser survives a reload.
     services:
       postgres:
         image: postgres:17-alpine

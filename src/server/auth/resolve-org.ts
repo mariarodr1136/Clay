@@ -3,11 +3,17 @@ import { and, eq } from "drizzle-orm";
 import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
 import { db } from "@/server/db/client";
 import { users, organizations, memberships, type MembershipRole } from "@/server/db/schema";
+import { readGuestSession } from "./guest-session";
 
 export type ActiveOrg = {
   userId: string;
   organizationId: string;
   role: MembershipRole;
+  // True for a /demo visitor in a throwaway workspace. Nothing about data
+  // access changes — a guest org is scoped exactly like any other — this
+  // only tells the UI to say the workspace isn't saved, and keeps guests out
+  // of flows that assume a real account (billing, invites, sharing).
+  isGuest: boolean;
 };
 
 // Clerk's roles are namespaced strings ("org:admin", "org:member"). Anything
@@ -88,7 +94,7 @@ async function syncClerkOrg(
     await db.update(memberships).set({ role }).where(eq(memberships.id, membership.id));
   }
 
-  return { userId, organizationId: org.id, role };
+  return { userId, organizationId: org.id, role, isGuest: false };
 }
 
 // No active Clerk organization: the user gets their own private workspace,
@@ -99,7 +105,7 @@ async function ensurePersonalOrg(userId: string): Promise<ActiveOrg> {
     where: and(eq(memberships.userId, userId), eq(memberships.isPersonal, true)),
   });
   if (existing) {
-    return { userId, organizationId: existing.organizationId, role: existing.role };
+    return { userId, organizationId: existing.organizationId, role: existing.role, isGuest: false };
   }
 
   const clerkUser = await currentUser();
@@ -132,17 +138,33 @@ async function ensurePersonalOrg(userId: string): Promise<ActiveOrg> {
     return { organizationId: org.id };
   });
 
-  return { userId, organizationId, role: "owner" };
+  return { userId, organizationId, role: "owner", isGuest: false };
 }
 
 // The single place the app decides which workspace a request belongs to.
 // Everything downstream scopes on the organizationId this returns, and it
 // is never taken from client input.
 export async function resolveActiveOrg(): Promise<ActiveOrg> {
+  // Guests are resolved first, and not only as a fallback: the middleware
+  // skips Clerk entirely when the guest cookie is present, so auth() would
+  // throw ("clerkMiddleware() was not run") rather than simply return no
+  // user. The cookie's signature is the whole authorization — it names one
+  // user and one organization, and nothing else about the request is
+  // trusted. Leaving the demo clears the cookie (see /demo/exit), so this
+  // can't shadow a real session.
+  const guest = await readGuestSession();
+  if (guest) {
+    return {
+      userId: guest.userId,
+      organizationId: guest.organizationId,
+      role: "owner",
+      isGuest: true,
+    };
+  }
+
   const { userId, orgId, orgRole } = await auth();
   if (!userId) throw new Error("resolveActiveOrg called without an authenticated user");
 
   await ensureUserRow(userId);
-
   return orgId ? syncClerkOrg(userId, orgId, orgRole) : ensurePersonalOrg(userId);
 }

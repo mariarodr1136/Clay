@@ -1,5 +1,4 @@
 import { eq } from "drizzle-orm";
-import { auth } from "@clerk/nextjs/server";
 import type { NextRequest } from "next/server";
 import { db } from "@/server/db/client";
 import { organizations, viewVersions } from "@/server/db/schema";
@@ -22,10 +21,16 @@ import { signPrintToken } from "@/server/export/print-token";
 // the export ceiling instead of the widget's 50-row default.
 
 export async function GET(request: NextRequest, ctx: { params: Promise<{ viewId: string }> }) {
-  const { userId } = await auth();
-  if (!userId) return new Response("Unauthorized", { status: 401 });
+  // resolveActiveOrg accepts a Clerk session or a signed guest cookie and
+  // throws when there's neither, so exports work identically in a demo
+  // workspace — same catalog, same writers, same files.
+  let organizationId: string;
+  try {
+    ({ organizationId } = await resolveActiveOrg());
+  } catch {
+    return new Response("Unauthorized", { status: 401 });
+  }
 
-  const { organizationId } = await resolveActiveOrg();
   const { viewId } = await ctx.params;
 
   const parsedQuery = parseExportQuery(request);

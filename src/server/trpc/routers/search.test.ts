@@ -20,7 +20,7 @@ describe("command palette search", () => {
   let trashedViewId: string;
 
   const caller = (organizationId: string) =>
-    appRouter.createCaller({ userId: user.id, organizationId, role: "owner" as const });
+    appRouter.createCaller({ userId: user.id, organizationId, role: "owner" as const, isGuest: false });
 
   beforeAll(async () => {
     [orgA] = await db.insert(organizations).values({ name: "Search Org A" }).returning();

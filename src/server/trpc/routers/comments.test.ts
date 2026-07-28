@@ -15,7 +15,7 @@ describe("comments authorization", () => {
   let taskInA: typeof tasks.$inferSelect;
 
   const caller = (userId: string, organizationId: string, role: MembershipRole = "owner") =>
-    appRouter.createCaller({ userId, organizationId, role });
+    appRouter.createCaller({ userId, organizationId, role, isGuest: false });
 
   beforeAll(async () => {
     [orgA] = await db.insert(organizations).values({ name: "Comments Org A" }).returning();

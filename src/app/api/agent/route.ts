@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
-import { auth } from "@clerk/nextjs/server";
 import { resolveActiveOrg } from "@/server/auth/resolve-org";
 import { db } from "@/server/db/client";
 import { projects } from "@/server/db/schema";
@@ -27,12 +26,18 @@ const bodySchema = z
   });
 
 export async function POST(req: Request) {
-  const { userId: clerkUserId } = await auth();
-  if (!clerkUserId) {
+  // A demo visitor gets the real agent against their real (throwaway)
+  // workspace — it's bring-your-own-key either way, so there's no cost
+  // reason to hold it back, and it's the feature the demo exists to show.
+  let organizationId: string;
+  let userId: string;
+  try {
+    ({ organizationId, userId } = await resolveActiveOrg());
+  } catch {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const rateLimit = await checkRateLimit(clerkUserId);
+  const rateLimit = await checkRateLimit(userId);
   if (!rateLimit.ok) {
     return Response.json(
       { error: `Too many requests — try again in ${rateLimit.retryAfterSeconds}s.` },
@@ -57,7 +62,6 @@ export async function POST(req: Request) {
     });
   }
 
-  const { organizationId, userId } = await resolveActiveOrg();
   const { message, projectId, viewId, model, threadId } = parsed.data;
 
   let viewName: string | undefined;

@@ -51,6 +51,7 @@ export const protectedProcedure = t.procedure.use(withDomainErrors).use(({ ctx, 
       userId: ctx.userId,
       organizationId: ctx.organizationId,
       role: ctx.role,
+      isGuest: ctx.isGuest,
     },
   });
 });

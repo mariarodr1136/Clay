@@ -1,8 +1,8 @@
 import { viewSchema } from "@/lib/dsl/schema";
-import { buildDemoViews } from "@/fixtures/demo-views";
+import { buildDemoViews } from "@/fixtures/sample-views";
 import { createView } from "./create-view";
 
-export async function seedDemoViews(organizationId: string, ownerId: string, projectId: string) {
+export async function seedSampleViews(organizationId: string, ownerId: string, projectId: string) {
   for (const fixture of buildDemoViews(projectId)) {
     await createView({
       organizationId,

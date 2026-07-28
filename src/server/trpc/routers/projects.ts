@@ -3,8 +3,8 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { router, protectedProcedure, ownerProcedure } from "../trpc";
 import { db } from "@/server/db/client";
 import { projects, tasks } from "@/server/db/schema";
-import { seedDemoData } from "@/server/db/seed-demo-data";
-import { seedDemoViews } from "@/server/db/seed-demo-views";
+import { seedSampleData } from "@/server/db/seed-sample-data";
+import { seedSampleViews } from "@/server/db/seed-sample-views";
 import { ConflictError, NotFoundError } from "@/server/errors";
 
 export const projectsRouter = router({
@@ -48,8 +48,8 @@ export const projectsRouter = router({
         "This workspace already has projects — sample data is only for empty workspaces."
       );
     }
-    const project = await seedDemoData(ctx.organizationId, ctx.userId);
-    await seedDemoViews(ctx.organizationId, ctx.userId, project.id);
+    const project = await seedSampleData(ctx.organizationId, ctx.userId);
+    await seedSampleViews(ctx.organizationId, ctx.userId, project.id);
     return project;
   }),
 

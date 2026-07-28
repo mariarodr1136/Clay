@@ -1,6 +1,6 @@
 import type { ViewInput } from "@/lib/dsl/schema";
 
-export type DemoViewFixture = {
+export type SampleViewFixture = {
   key: string;
   prompt: string;
   name: string;
@@ -11,7 +11,7 @@ export type DemoViewFixture = {
 // against the live DSL and the real query catalog, so they exercise the
 // same renderer path as agent-generated views: KPI rows, stacked bars,
 // donuts, filters, and badge-aware tables.
-export function buildDemoViews(projectId: string): DemoViewFixture[] {
+export function buildDemoViews(projectId: string): SampleViewFixture[] {
   const statusSeries = [
     { key: "todo", label: "To do", colorVar: "--status-todo" },
     { key: "in_progress", label: "In progress", colorVar: "--status-in-progress" },

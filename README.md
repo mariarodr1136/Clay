@@ -1,14 +1,14 @@
 # Clay
 
-![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6) ![Next.js](https://img.shields.io/badge/Next.js_16-App_Router-000000) ![React](https://img.shields.io/badge/React_19-Frontend-61DAFB) ![tRPC](https://img.shields.io/badge/tRPC-11-2596BE) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Drizzle_ORM-4169E1) ![Claude](https://img.shields.io/badge/Claude-Agent_Loop-D97757) ![Vitest](https://img.shields.io/badge/Vitest-81_tests_+_e2e-6E9F18) ![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000)
+![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6) ![Next.js](https://img.shields.io/badge/Next.js_16-App_Router-000000) ![React](https://img.shields.io/badge/React_19-Frontend-61DAFB) ![tRPC](https://img.shields.io/badge/tRPC-11-2596BE) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Drizzle_ORM-4169E1) ![Claude](https://img.shields.io/badge/Claude-Agent_Loop-D97757) ![Vitest](https://img.shields.io/badge/Vitest-112_tests_+_e2e-6E9F18) ![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000)
 
 A project tracker where the UI isn't fixed. Describe the dashboard you need in plain language, and an agent built on the Claude API writes it — live, against your real projects and tasks, in seconds.
 
 Instead of a fixed set of dashboards and a settings menu to configure them, Clay exposes an allow-listed catalog of queries over your data and gives an LLM tool-use loop exactly two abilities: run one of those queries, or propose a view (a small layout of widgets bound to the results). Every request that changes an existing view creates a new version rather than overwriting it, so nothing you or the agent builds is ever lost.
 
-**Live Demo:** [clay-gray.vercel.app](https://clay-gray.vercel.app) — a read-only preview with sample data, no account required. 
+**Live Demo:** [clay-gray.vercel.app](https://clay-gray.vercel.app) — a real, temporary workspace. No account, no read-only mode: create tasks, build dashboards, export them. It's swept 24 hours later.
 
-**Run Locally:** Open `/demo` (see [Getting Started](#getting-started)).
+**Run Locally:** Open `/demo` (see [Getting Started](#getting-started)) — it hands you a real, temporary workspace, no account needed.
 
 ---
 
@@ -67,13 +67,14 @@ Instead of a fixed set of dashboards and a settings menu to configure them, Clay
 - **Share a view with anyone** — mint an unguessable, revocable public link that renders a read-only snapshot of the view server-side. No account needed to look; no way to query anything beyond what was shared.
 - **Templates** — save any view as a reusable template and stamp out the same dashboard again in one click.
 - **A real widget vocabulary** — KPI tiles (with notes and danger intent), multi-series line/area charts, stacked bars, donuts, progress meters, filter bars, and badge-aware tables — all declarative, Zod-validated, and bound to catalog queries; never generated code.
-- **Exports that go through the catalog** — any view downloads as a multi-sheet Excel workbook (one sheet per distinct query, plus a cover sheet recording the prompt, version, and filters behind the numbers), any table as CSV, and the whole dashboard as a one-click PDF rendered by headless Chrome against the app's own print stylesheet — charts stay vector-sharp, not rasterized. Exports re-run the same org-scoped catalog queries server-side rather than dumping what the client happens to hold, so they get complete data instead of the widget's 50-row page. The demo exports for real too — same planner, same writers, against the sample fixtures.
+- **Exports that go through the catalog** — any view downloads as a multi-sheet Excel workbook (one sheet per distinct query, plus a cover sheet recording the prompt, version, and filters behind the numbers), any table as CSV, and the whole dashboard as a one-click PDF rendered by headless Chrome against the app's own print stylesheet — charts stay vector-sharp, not rasterized. Exports re-run the same org-scoped catalog queries server-side rather than dumping what the client happens to hold, so they get complete data instead of the widget's 50-row page. The demo exports for real too, because the demo *is* the app.
+- **The demo is the product** — `/demo` doesn't render a mock. It provisions a real, seeded workspace behind a signed cookie and drops you into the ordinary app: same pages, same allow-listed catalog, same exports, same agent. Writes land in a real database and survive a reload; the whole tenant is swept after 24 hours by a cron. There is no second renderer to keep in sync, and nothing the demo shows is something the product can't do.
 - **Versioned, never overwritten** — every agent edit (and every manual one) writes a new `view_versions` row with a parent pointer, so a view's entire prompt/edit history is always recoverable.
 - **Read-only, allow-listed agent tools** — the agent never writes SQL or touches the database directly. Its only read path is a fixed catalog of org-scoped queries (`tasksList`, `statusByProject`, `velocityByWeek`, `cycleTimeByWeek`, `createdVsCompleted`, `agingWip`, `pointsByProject`, `overdueTasks`, `upcomingTasks`, `completionsOverTime`, etc.), and every tool call is validated against a Zod schema before it runs.
 - **Bring-your-own-key** — the chat UI takes your own Anthropic API key, held only in the browser tab and sent per-request; there's no server-side key to leak or bill against.
 - **Full audit trail** — every view created or changed in an organization shows up in the audit log, whether it was the agent or a person.
 - **Adversarial test coverage** — a dedicated security suite asserts the agent can never escalate a view to org-wide scope, can't reference an unknown widget type or catalog id, and can't write across an organization boundary even with a version id from the wrong org.
-- **Rate-limited by design** — 10 agent requests per 5-minute window per user, enforced server-side ahead of any Anthropic call, with the window state in Postgres so it holds across serverless instances and deploys.
+- **Rate-limited by design** — 10 agent requests per 5-minute window per user, enforced server-side ahead of any Anthropic call, with the window state in Postgres so it holds across serverless instances and deploys. Demo workspace creation has its own, wider per-IP budget, because an IP is not a person.
 - **Real projects and tasks underneath** — a standard project/task tracker (status, priority, due dates, assignees, comments) sits under the generated-view layer, so there's always real data for views to bind to.
 - **⌘K everything** — one palette searches projects, views, and tasks across the workspace, and free text falls through to the agent, so "build me a delivery dashboard" is a keystroke away from anywhere in the app.
 - **Bring your existing backlog** — import tasks from a CSV (upload or paste). Columns are matched automatically where the header is recognisable, statuses and priorities are translated from the wording spreadsheets actually use ("In Progress", "P1", "Closed"), assignees are resolved against workspace members, and a dry-run preview reports every row that needs attention *before* anything is written. The parser round-trips this app's own CSV export, formula-guard and all.
@@ -119,7 +120,7 @@ npm run db:push
 npm run dev
 ```
 
-The app runs at http://localhost:3000. Sign up to get an empty personal workspace with a guided start — create your first project, or load a sample workspace (a seeded project plus generated views) with one click. Use the workspace switcher in the header to create a shared organization and invite teammates; everything in Clay is scoped to whichever workspace is active, and owners get the destructive actions (deleting a project, seeding sample data) that members don't. Or visit `/demo` for a read-only, fully loaded showcase with no account: a six-project portfolio, eight example dashboards, scripted agent conversations, and an audit trail. Exports work there for real — open any demo view and download the workbook, a CSV, or the PDF.
+The app runs at http://localhost:3000. Sign up to get an empty personal workspace with a guided start — create your first project, or load a sample workspace (a seeded project plus generated views) with one click. Use the workspace switcher in the header to create a shared organization and invite teammates; everything in Clay is scoped to whichever workspace is active, and owners get the destructive actions (deleting a project, seeding sample data) that members don't. Or visit `/demo` to skip the account entirely: it provisions a real, seeded workspace behind a signed cookie and drops you into the ordinary app. Not a mock — the same pages, the same catalog queries, the same exports and agent. Create tasks, drag dashboards around, import a CSV; it all persists, and the whole workspace is swept 24 hours later.
 
 To use the "ask your interface into existence" chat, paste your own Anthropic API key into the chat panel — it's sent per-request and never stored server-side.
 
@@ -145,16 +146,16 @@ Two notes on PDF export specifically:
 |---|---|
 | `npm run dev` | Runs the Next.js dev server (Turbopack) |
 | `npm test` | Vitest suite — unit tests plus adversarial agent-security tests |
-| `npm run test:e2e` | Builds, then drives the real `/demo` in headless Chrome (pages, layout editor, exports) |
+| `npm run test:e2e` | Builds, then drives the real app in headless Chrome through `/demo` (pages, layout editor, writes, exports) |
 | `npm run lint` | ESLint across the project |
 | `npm run build` | Production build |
 | `npm run db:push` | Push the Drizzle schema straight to Postgres (dev convenience) |
 | `npm run db:generate` / `db:migrate` | Generate versioned SQL migrations from the schema / apply them |
 | `npm run db:studio` | Open Drizzle Studio to browse the database |
 
-Every pull request runs `lint`, the Vitest suite (against a throwaway Postgres service container), a production build, and the headless-Chrome e2e suite over `/demo` via [GitHub Actions](.github/workflows/ci.yml) — no repository secrets required.
+Every pull request runs `lint`, the Vitest suite (against a throwaway Postgres service container), a production build, and the headless-Chrome e2e suite via [GitHub Actions](.github/workflows/ci.yml) — no repository secrets required.
 
-The e2e suite runs in CI too, with no repository secrets. It used to be local-only: `ClerkProvider` sat in the root layout, so every page — including `/demo` — loaded Clerk's frontend bundle, which throwaway keys can't serve. The provider is now mounted only where it's actually needed (the signed-in app, and the sign-in/sign-up pages), and `/demo`, `/share`, `/print`, and `/health` are excluded from the auth middleware, so the public surface the e2e suite drives never touches Clerk. Public pages also no longer pay to download Clerk's JS.
+The e2e suite runs in CI too, with no repository secrets — and because `/demo` is now the real app on a throwaway tenant, it exercises the pages customers actually use rather than a lookalike. Two things make that possible without an auth provider: `ClerkProvider` is mounted only where it's needed (the signed-in app and the sign-in/sign-up pages) instead of the root layout, and the middleware skips Clerk entirely for a request carrying a guest cookie. Public pages also no longer pay to download Clerk's JS.
 
 `npm run test:e2e` remains the local entry point — it lifts `.env.local` into the environment to dodge the `vercel env pull` footgun described above. CI runs `next build` plus the e2e config directly, since the workflow's own env is already the source of truth.
 
@@ -169,7 +170,7 @@ Clay/
 ├── src/
 │   ├── app/
 │   │   ├── page.tsx                  # Marketing homepage
-│   │   ├── demo/                     # Public, read-only showcase — sample portfolio, dashboards, scripted agent chats
+│   │   ├── demo/                     # Mints a throwaway workspace, then redirects into the real app (route.ts + exit/)
 │   │   ├── sign-in/ sign-up/         # Clerk auth pages
 │   │   ├── (app)/                    # Authenticated app shell
 │   │   │   ├── dashboard/            # Project list
@@ -181,15 +182,15 @@ Clay/
 │   │   ├── print/                    # Chrome-less print pages the PDF renderer captures (token-gated for live views)
 │   │   └── api/
 │   │       ├── agent/route.ts        # Runs the Claude tool-use loop for a request
-│   │       ├── views/[viewId]/export/    # XLSX / CSV / PDF for a live view
-│   │       ├── demo/views/[viewId]/export/  # The same, over the demo fixtures
+│   │       ├── views/[viewId]/export/    # XLSX / CSV / PDF for a view
+│   │       ├── cron/sweep-guests/    # Deletes expired demo workspaces (hourly)
 │   │       └── trpc/[trpc]/          # tRPC route handler
-│   ├── components/                   # UI primitives (shadcn/Radix), shared chart core, agent + view components
-│   ├── fixtures/                     # Static demo data + sample-workspace view fixtures
+│   ├── components/                   # UI primitives (shadcn/Radix), one renderer + widget set, agent + view components
+│   ├── fixtures/                     # Sample-workspace view fixtures (seeded into new and demo workspaces)
 │   ├── lib/                          # tRPC client, view DSL (Zod), filter/query-key helpers, task display metadata
 │   └── server/
 │       ├── agent/                    # Streaming tool-use loop, tool executor, rate limiter, tools/
-│       ├── auth/                     # ensureUserOrg — provisions an empty org on first sign-in
+│       ├── auth/                     # resolveActiveOrg — Clerk org, personal workspace, or a signed guest session
 │       ├── data-access/              # The query catalog (agent's only read path) + mutation catalog (the only write path)
 │       ├── db/                       # Drizzle schema, client, opt-in sample-workspace seed
 │       ├── export/                   # Dataset planner, CSV/XLSX writers, PDF renderer, print tokens
