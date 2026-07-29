@@ -336,6 +336,18 @@ export default function ProjectPage() {
                     >
                       {task.title}
                     </button>
+                    {task.tags.length > 0 && (
+                      <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
+                        {task.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Select

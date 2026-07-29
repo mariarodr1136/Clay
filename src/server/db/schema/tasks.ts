@@ -30,6 +30,10 @@ export const tasks = pgTable(
     // Story points. 0 means "unestimated" — velocity/effort queries sum this,
     // so an unestimated task simply contributes nothing rather than skewing.
     points: integer("points").notNull().default(0),
+    // Free-form labels. An array column rather than a join table: tags are
+    // read on every task row and never queried on their own, so a join
+    // would cost a trip to save a normalization nobody needs here.
+    tags: text("tags").array().notNull().default([]),
     orderIndex: integer("order_index").notNull().default(0),
     createdBy: text("created_by")
       .notNull()

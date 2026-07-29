@@ -6,6 +6,7 @@ import { format, formatDistanceToNow, parseISO } from "date-fns";
 import { MessageSquare, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { StatusBadge, PriorityBadge } from "@/components/task-badges";
+import { TaskTags } from "@/components/tasks/task-tags";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
@@ -156,6 +157,8 @@ export function TaskDetailDialog({
                 </SelectContent>
               </Select>
             </div>
+
+            <TaskTags taskId={detail.task.id} tags={detail.task.tags ?? []} />
 
             {detail.task.description && (
               <p className="text-muted-foreground text-sm leading-relaxed whitespace-pre-wrap">

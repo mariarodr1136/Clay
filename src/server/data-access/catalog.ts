@@ -17,6 +17,9 @@ import { agingWip, agingWipParams } from "./queries/aging-wip";
 import { pointsByProject, pointsByProjectParams } from "./queries/points-by-project";
 import { recentActivity, recentActivityParams } from "./queries/recent-activity";
 import { activityByUser, activityByUserParams } from "./queries/activity-by-user";
+import { statusByFolder, statusByFolderParams } from "./queries/status-by-folder";
+import { openPointsByFolder, openPointsByFolderParams } from "./queries/open-points-by-folder";
+import { tasksByTag, tasksByTagParams } from "./queries/tasks-by-tag";
 import { EXPORT_ROW_LIMIT, INTERACTIVE_ROW_LIMIT } from "./limits";
 import { InvalidRequestError } from "@/server/errors";
 
@@ -142,6 +145,24 @@ export const queryCatalog = {
       "Per-person activity counts over the last N days (default 30) ({ actor, created, statusChanges, assignments, total }) — who is moving work; ideal for a stackedBar chart with xField 'actor'.",
     paramsSchema: activityByUserParams,
     run: activityByUser,
+  },
+  statusByFolder: {
+    description:
+      "Task status counts grouped by project folder ({ folder, todo, in_progress, in_review, done, total }) — how each area of the workspace is doing; ideal for a stackedBar chart with xField 'folder'. Projects in no folder appear as 'Unfiled'.",
+    paramsSchema: statusByFolderParams,
+    run: statusByFolder,
+  },
+  openPointsByFolder: {
+    description:
+      "Open story points and task count per project folder ({ folder, points, tasks }) — where remaining effort sits across areas; ideal for a donut or bar chart.",
+    paramsSchema: openPointsByFolderParams,
+    run: openPointsByFolder,
+  },
+  tasksByTag: {
+    description:
+      "Task and point counts per tag ({ tag, count, points }), open work only unless includeDone is true — what kind of work is outstanding; ideal for a bar chart with xField 'tag'.",
+    paramsSchema: tasksByTagParams,
+    run: tasksByTag,
   },
 } satisfies Record<string, CatalogEntry>;
 

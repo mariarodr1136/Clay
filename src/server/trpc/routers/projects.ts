@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, isNotNull, sql } from "drizzle-orm";
 import { router, protectedProcedure, ownerProcedure } from "../trpc";
 import { db } from "@/server/db/client";
-import { projects, tasks, users, projectFolders } from "@/server/db/schema";
+import { projects, tasks, users, projectFolders, memberships } from "@/server/db/schema";
+import { projectHealth } from "@/lib/project-health";
 import { seedSampleData, seedSampleHistory } from "@/server/db/seed-sample-data";
 import { seedSampleViews } from "@/server/db/seed-sample-views";
 import { ConflictError, NotFoundError } from "@/server/errors";
@@ -10,7 +11,7 @@ import { ConflictError, NotFoundError } from "@/server/errors";
 export const projectsRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
     return db.query.projects.findMany({
-      where: eq(projects.organizationId, ctx.organizationId),
+      where: and(eq(projects.organizationId, ctx.organizationId), isNull(projects.archivedAt)),
       orderBy: desc(projects.createdAt),
     });
   }),
@@ -18,13 +19,16 @@ export const projectsRouter = router({
   // Projects with the task roll-ups the dashboard cards render (progress
   // bar, overdue badge) — one grouped query instead of N stats calls.
   listWithStats: protectedProcedure.query(async ({ ctx }) => {
-    return db
+    const rows = await db
       .select({
         id: projects.id,
         name: projects.name,
         description: projects.description,
         folderId: projects.folderId,
+        pinnedAt: projects.pinnedAt,
+        targetDate: projects.targetDate,
         createdAt: projects.createdAt,
+        updatedAt: projects.updatedAt,
         total: sql<number>`count(${tasks.id})::int`,
         done: sql<number>`count(*) filter (where ${tasks.status} = 'done')::int`,
         inFlight: sql<number>`count(*) filter (where ${tasks.status} in ('in_progress', 'in_review'))::int`,
@@ -32,10 +36,99 @@ export const projectsRouter = router({
       })
       .from(projects)
       .leftJoin(tasks, eq(tasks.projectId, projects.id))
-      .where(eq(projects.organizationId, ctx.organizationId))
+      .where(and(eq(projects.organizationId, ctx.organizationId), isNull(projects.archivedAt)))
       .groupBy(projects.id)
       .orderBy(desc(projects.createdAt));
+
+    // Health is derived here rather than in the client so the card, the
+    // project header and anything else agree without repeating the rules.
+    return rows.map((row) => ({
+      ...row,
+      ...projectHealth({
+        overdue: row.overdue,
+        total: row.total,
+        done: row.done,
+        targetDate: row.targetDate,
+      }),
+    }));
   }),
+
+  listArchived: protectedProcedure.query(async ({ ctx }) => {
+    return db
+      .select({
+        id: projects.id,
+        name: projects.name,
+        archivedAt: projects.archivedAt,
+      })
+      .from(projects)
+      .where(and(eq(projects.organizationId, ctx.organizationId), isNotNull(projects.archivedAt)))
+      .orderBy(desc(projects.archivedAt));
+  }),
+
+  update: protectedProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        name: z.string().min(1).max(200).optional(),
+        description: z.string().max(2000).nullable().optional(),
+        // Null clears the lead or the date; undefined leaves it alone.
+        leadId: z.string().nullable().optional(),
+        targetDate: z.string().date().nullable().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...changes } = input;
+
+      if (changes.leadId) {
+        // A lead has to actually be in this workspace, same rule the
+        // assignee check uses.
+        const membership = await db.query.memberships.findFirst({
+          where: and(
+            eq(memberships.organizationId, ctx.organizationId),
+            eq(memberships.userId, changes.leadId)
+          ),
+        });
+        if (!membership) throw new NotFoundError("Member");
+      }
+
+      const [updated] = await db
+        .update(projects)
+        .set({ ...changes, updatedAt: new Date() })
+        .where(and(eq(projects.id, id), eq(projects.organizationId, ctx.organizationId)))
+        .returning();
+      if (!updated) throw new NotFoundError("Project");
+      return updated;
+    }),
+
+  setPinned: protectedProcedure
+    .input(z.object({ id: z.string().uuid(), pinned: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const [updated] = await db
+        .update(projects)
+        .set({ pinnedAt: input.pinned ? new Date() : null })
+        .where(and(eq(projects.id, input.id), eq(projects.organizationId, ctx.organizationId)))
+        .returning();
+      if (!updated) throw new NotFoundError("Project");
+      return updated;
+    }),
+
+  // Replaces deleting as the everyday action. Nothing is lost, so this
+  // isn't owner-gated the way a real delete is.
+  archive: protectedProcedure
+    .input(z.object({ id: z.string().uuid(), archived: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const [updated] = await db
+        .update(projects)
+        .set({
+          archivedAt: input.archived ? new Date() : null,
+          // An archived project shouldn't come back still pinned to the top.
+          ...(input.archived ? { pinnedAt: null } : {}),
+        })
+        .where(and(eq(projects.id, input.id), eq(projects.organizationId, ctx.organizationId)))
+        .returning();
+      if (!updated) throw new NotFoundError("Project");
+      return updated;
+    }),
 
   // Explicit opt-in replacement for the old always-on sign-up seeding: fills
   // an empty workspace with the sample project, tasks, and generated views
@@ -160,9 +253,22 @@ export const projectsRouter = router({
       return updated;
     }),
 
-  delete: ownerProcedure
+  // Permanently destroys a project and every task in it. Owner-only, and
+  // only reachable from the archive: archiving is the reversible action
+  // people actually want, and requiring a project be archived first means
+  // this can't be hit by a stray click on a project someone is using.
+  purge: ownerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
+      const archived = await db.query.projects.findFirst({
+        where: and(
+          eq(projects.id, input.id),
+          eq(projects.organizationId, ctx.organizationId),
+          isNotNull(projects.archivedAt)
+        ),
+      });
+      if (!archived) throw new NotFoundError("Project");
+
       await db
         .delete(tasks)
         .where(and(eq(tasks.projectId, input.id), eq(tasks.organizationId, ctx.organizationId)));

@@ -116,6 +116,8 @@ export async function seedSampleData(
             : null,
         folderId:
           project.folder === undefined ? null : insertedFolders[project.folder].id,
+        pinnedAt: project.pinned ? daysAgo(3) : null,
+        archivedAt: project.archived ? daysAgo(9) : null,
         targetDate:
           project.targetInDays === undefined
             ? null
@@ -137,6 +139,7 @@ export async function seedSampleData(
         status: task.status,
         priority: task.priority,
         points: task.points,
+        tags: task.tags ?? [],
         assigneeId: ownerFor(task),
         dueDate: task.dueInDays === undefined ? null : isoDate(daysAgo(-task.dueInDays)),
         orderIndex: taskIndex,

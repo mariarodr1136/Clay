@@ -66,6 +66,24 @@ export const tasksRouter = router({
       });
     }),
 
+  setTags: protectedProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        // Capped so a runaway client can't turn one row into a document.
+        tags: z.array(z.string().min(1).max(24)).max(12),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const [task] = await db
+        .update(tasks)
+        .set({ tags: input.tags, updatedAt: new Date() })
+        .where(and(eq(tasks.id, input.id), eq(tasks.organizationId, ctx.organizationId)))
+        .returning();
+      if (!task) throw new NotFoundError("Task");
+      return task;
+    }),
+
   updateStatus: protectedProcedure
     .input(z.object({ id: z.string().uuid(), status: z.enum(taskStatuses) }))
     .mutation(async ({ ctx, input }) => {

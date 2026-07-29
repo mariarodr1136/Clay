@@ -21,6 +21,12 @@ export const projects = pgTable(
     // simply become ungrouped again.
     folderId: uuid("folder_id").references(() => projectFolders.id, { onDelete: "set null" }),
     targetDate: date("target_date"),
+    // Pinned projects float above the folders. A timestamp rather than a
+    // boolean so several pins keep a stable, meaningful order.
+    pinnedAt: timestamp("pinned_at", { withTimezone: true }),
+    // Archiving replaces deleting. Deleting a project took every task in it
+    // with no undo, which is a lot of destruction to hang off one menu item.
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),

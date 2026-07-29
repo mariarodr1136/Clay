@@ -2,7 +2,17 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { FolderPlus, MoreHorizontal, PencilLine, Trash2 } from "lucide-react";
+import {
+  Archive,
+  ArrowDown,
+  ArrowUp,
+  FolderPlus,
+  MoreHorizontal,
+  PencilLine,
+  Pin,
+  PinOff,
+  Trash2,
+} from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +21,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -107,7 +118,16 @@ export function NewFolderButton({ folderCount }: { folderCount: number }) {
   );
 }
 
-export function FolderMenu({ folder }: { folder: Folder }) {
+export function FolderMenu({
+  folder,
+  index,
+  order,
+}: {
+  folder: Folder;
+  index: number;
+  // Every folder id in display order, so a move is just a swap.
+  order: string[];
+}) {
   const utils = trpc.useUtils();
   const [renameOpen, setRenameOpen] = useState(false);
   const [draft, setDraft] = useState(folder.name);
@@ -124,6 +144,20 @@ export function FolderMenu({ folder }: { folder: Folder }) {
     },
     onError: (err) => toast.error(err.message),
   });
+
+  const reorder = trpc.folders.reorder.useMutation({
+    onSuccess: refresh,
+    onError: (err) => toast.error(err.message),
+  });
+
+  // Buttons rather than drag-and-drop: this is reachable from the keyboard
+  // without inventing a whole drag interaction, and there are rarely enough
+  // folders for dragging to be worth it.
+  const swapWith = (target: number) => {
+    const next = [...order];
+    [next[index], next[target]] = [next[target], next[index]];
+    reorder.mutate({ folderIds: next });
+  };
 
   const remove = trpc.folders.delete.useMutation({
     onSuccess: () => {
@@ -157,6 +191,17 @@ export function FolderMenu({ folder }: { folder: Folder }) {
           >
             <PencilLine />
             Rename
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={index === 0} onSelect={() => swapWith(index - 1)}>
+            <ArrowUp />
+            Move up
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={index === order.length - 1}
+            onSelect={() => swapWith(index + 1)}
+          >
+            <ArrowDown />
+            Move down
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
@@ -208,25 +253,34 @@ export function FolderMenu({ folder }: { folder: Folder }) {
   );
 }
 
-export function MoveProjectMenu({
-  projectId,
-  projectName,
-  folderId,
+export function ProjectCardMenu({
+  project,
   folders,
+  onEdit,
 }: {
-  projectId: string;
-  projectName: string;
-  folderId: string | null;
+  project: { id: string; name: string; folderId: string | null; pinnedAt: Date | string | null };
   folders: Folder[];
+  onEdit: () => void;
 }) {
   const utils = trpc.useUtils();
 
-  const move = trpc.projects.move.useMutation({
+  const refresh = () => {
+    utils.projects.listWithStats.invalidate();
+    utils.projects.listArchived.invalidate();
+    utils.folders.list.invalidate();
+  };
+
+  const move = trpc.projects.move.useMutation({ onSuccess: refresh, onError: (e) => toast.error(e.message) });
+  const setPinned = trpc.projects.setPinned.useMutation({
+    onSuccess: refresh,
+    onError: (e) => toast.error(e.message),
+  });
+  const archive = trpc.projects.archive.useMutation({
     onSuccess: () => {
-      utils.projects.listWithStats.invalidate();
-      utils.folders.list.invalidate();
+      toast.success("Project archived", { description: "Nothing was deleted — restore it any time." });
+      refresh();
     },
-    onError: (err) => toast.error(err.message),
+    onError: (e) => toast.error(e.message),
   });
 
   // The card is a link, so every control here has to stop the click from
@@ -236,13 +290,15 @@ export function MoveProjectMenu({
     event.stopPropagation();
   };
 
+  const pinned = Boolean(project.pinnedAt);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild onClick={stop}>
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label={`Move ${projectName} to a folder`}
+          aria-label={`Actions for ${project.name}`}
           className="text-muted-foreground -mt-1 shrink-0"
         >
           <MoreHorizontal />
@@ -250,17 +306,29 @@ export function MoveProjectMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" onClick={stop}>
         <DropdownMenuItem
-          disabled={folderId === null}
-          onSelect={() => move.mutate({ projectId, folderId: null })}
+          onSelect={() => setPinned.mutate({ id: project.id, pinned: !pinned })}
+        >
+          {pinned ? <PinOff /> : <Pin />}
+          {pinned ? "Unpin" : "Pin to top"}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onEdit}>
+          <PencilLine />
+          Settings
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>Move to</DropdownMenuLabel>
+        <DropdownMenuItem
+          disabled={project.folderId === null}
+          onSelect={() => move.mutate({ projectId: project.id, folderId: null })}
         >
           No folder
         </DropdownMenuItem>
-        {folders.length > 0 && <DropdownMenuSeparator />}
         {folders.map((folder) => (
           <DropdownMenuItem
             key={folder.id}
-            disabled={folder.id === folderId}
-            onSelect={() => move.mutate({ projectId, folderId: folder.id })}
+            disabled={folder.id === project.folderId}
+            onSelect={() => move.mutate({ projectId: project.id, folderId: folder.id })}
           >
             <span
               className="size-2 rounded-full"
@@ -269,6 +337,16 @@ export function MoveProjectMenu({
             {folder.name}
           </DropdownMenuItem>
         ))}
+
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          variant="destructive"
+          disabled={archive.isPending}
+          onSelect={() => archive.mutate({ id: project.id, archived: true })}
+        >
+          <Archive />
+          Archive
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
