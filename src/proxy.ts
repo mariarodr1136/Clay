@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { NextFetchEvent } from "next/server";
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { GUEST_COOKIE } from "@/server/auth/guest-session";
+import { GUEST_COOKIE, verifyGuestToken } from "@/server/auth/guest-token";
 
 // /api/agent and /api/trpc handle their own auth check internally and return
 // a proper JSON 401 rather than the HTML redirect auth.protect() would
@@ -27,16 +27,34 @@ const withClerk = clerkMiddleware(async (auth, req) => {
 // clerkMiddleware still triggers a handshake against the Clerk instance,
 // which a demo visitor has no business paying for.
 //
-// Presence is all that's checked here on purpose. This is a routing
-// decision, not the security boundary — the signature is verified server
-// side in resolveActiveOrg, which is what actually picks the organization
-// every query is scoped to. A forged cookie gets past this line and then
-// resolves to no workspace at all.
-export default function middleware(request: NextRequest, event: NextFetchEvent) {
-  if (request.cookies.has(GUEST_COOKIE)) {
+// The signature is verified here, not merely noticed. Checking presence
+// alone left a gap that 500'd every protected page: an expired or
+// foreign-signed cookie routed the request around Clerk, and then
+// resolveActiveOrg rejected the token and fell through to auth(), which
+// throws when clerkMiddleware hasn't run. A visitor in that state had no way
+// out of it except clearing cookies by hand — so an unusable cookie is now
+// stripped on the way past, and the request continues as an ordinary
+// signed-out one.
+export default async function middleware(request: NextRequest, event: NextFetchEvent) {
+  const cookie = request.cookies.get(GUEST_COOKIE)?.value;
+
+  if (cookie && verifyGuestToken(cookie)) {
     return NextResponse.next();
   }
-  return withClerk(request, event);
+
+  // An unusable cookie is treated as no cookie: the request proceeds through
+  // Clerk exactly as a signed-out one would, and the dead cookie is stripped
+  // from whatever response that produces. Deliberately not a redirect back
+  // to the same path — that recovers only if the browser honours the
+  // deletion, and loops forever if it doesn't.
+  const response = (await withClerk(request, event)) ?? NextResponse.next();
+  if (cookie) {
+    response.headers.append(
+      "Set-Cookie",
+      `${GUEST_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`
+    );
+  }
+  return response;
 }
 
 // Deliberately public, and excluded from the matcher so Clerk's middleware

@@ -1,6 +1,6 @@
 # Clay
 
-![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6) ![Next.js](https://img.shields.io/badge/Next.js_16-App_Router-000000) ![React](https://img.shields.io/badge/React_19-Frontend-61DAFB) ![tRPC](https://img.shields.io/badge/tRPC-11-2596BE) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Drizzle_ORM-4169E1) ![Claude](https://img.shields.io/badge/Claude-Agent_Loop-D97757) ![Vitest](https://img.shields.io/badge/Vitest-222_tests_+_e2e-6E9F18) ![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000)
+![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6) ![Next.js](https://img.shields.io/badge/Next.js_16-App_Router-000000) ![React](https://img.shields.io/badge/React_19-Frontend-61DAFB) ![tRPC](https://img.shields.io/badge/tRPC-11-2596BE) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Drizzle_ORM-4169E1) ![Claude](https://img.shields.io/badge/Claude-Agent_Loop-D97757) ![Vitest](https://img.shields.io/badge/Vitest-249_tests_+_e2e-6E9F18) ![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000)
 
 A project tracker where the UI isn't fixed. Describe the dashboard you need in plain language, and an agent built on the Claude API writes it — live, against your real projects and tasks, in seconds.
 
