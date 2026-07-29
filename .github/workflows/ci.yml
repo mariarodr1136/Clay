@@ -20,14 +20,13 @@ env:
   # publishable key decodes to "example.clerk.accounts.dev$", the shape Clerk
   # expects.
   #
-  # `npm run test:e2e` is deliberately not a job here yet. The old blocker is
-  # gone — the suite now drives /demo, which hands out a throwaway workspace
-  # behind a signed cookie and skips Clerk entirely, so it no longer needs
-  # real keys. What's missing is evidence: Actions stopped dispatching runs
-  # for this repository, so a Postgres-service job added here could not be
-  # observed passing even once, and an unproven job on main is worse than an
-  # absent one. Run it locally with `npm run test:e2e` (9 tests, ~30s), and
-  # add the job back once a CI run is seen going green.
+  # The e2e suite runs here too. It used to be impossible: it drives real
+  # browser navigations, and on a Clerk development instance those get a
+  # handshake against Clerk's own domain, which a fake instance cannot serve
+  # — every page load came back 400. It now drives /demo instead, which hands
+  # out a throwaway workspace behind a signed cookie and skips Clerk in the
+  # middleware entirely, so the suite exercises the pages a customer actually
+  # uses without needing real keys as repository secrets.
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
   CLERK_SECRET_KEY: sk_test_ci_dummy_value_not_a_real_secret
 
@@ -95,3 +94,61 @@ jobs:
       # build that reaches for one at module scope is a regression worth
       # failing on.
       - run: npm run build
+
+  e2e:
+    name: Demo e2e (headless Chrome)
+    runs-on: ubuntu-latest
+
+    # A demo visit provisions a real workspace and seeds it, so this suite
+    # genuinely needs a database — it asserts that a task created in the
+    # browser survives a reload.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: clay_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/clay_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Apply migrations
+        run: npm run db:migrate
+
+      # Ubuntu 23.10+ restricts unprivileged user namespaces through AppArmor,
+      # and Chrome's sandbox is built on them — without this the browser
+      # aborts on launch with "No usable sandbox!" before a single test runs.
+      #
+      # The alternative is passing --no-sandbox to puppeteer, which is the
+      # usual advice and is worse twice over: it turns off a real security
+      # boundary, and it has to be gated on CI or it weakens local runs too —
+      # so the suite would no longer be launching the browser the same way in
+      # both places. Relaxing the setting on a disposable runner VM keeps the
+      # sandbox on and keeps the test code identical everywhere.
+      - name: Allow Chrome's sandbox to use user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      # Not `npm run test:e2e`: that wrapper lifts .env.local into the
+      # environment to dodge a `vercel env pull` footgun, and there is no
+      # .env.local here — the job's own env is already the source of truth.
+      - run: npx next build
+
+      - run: npx vitest run --config vitest.e2e.config.ts
