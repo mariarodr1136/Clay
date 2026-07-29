@@ -14,6 +14,7 @@ import { statusMeta } from "@/lib/task-display";
 import { StatusBadge, PriorityBadge } from "@/components/task-badges";
 import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
 import { ProjectHeader } from "@/components/tasks/project-header";
+import { HealthBadge } from "@/components/projects/health-badge";
 import { ImportDialog } from "@/components/tasks/import-dialog";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -121,7 +122,12 @@ export default function ProjectPage() {
     <div className="mx-auto max-w-5xl space-y-8">
       <div className="flex items-center justify-between">
         <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight">{project.data?.name ?? "…"}</h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-3xl font-semibold tracking-tight">{project.data?.name ?? "…"}</h1>
+            {project.data && (
+              <HealthBadge health={project.data.health} reason={project.data.reason} />
+            )}
+          </div>
           {project.data?.description && (
             <p className="text-muted-foreground max-w-xl text-sm">{project.data.description}</p>
           )}

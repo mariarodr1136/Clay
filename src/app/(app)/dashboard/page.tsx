@@ -24,7 +24,8 @@ import {
 } from "@/components/projects/folder-controls";
 import { ProjectEditDialog } from "@/components/projects/project-edit-dialog";
 import { ArchivedProjects } from "@/components/projects/archived-projects";
-import { HEALTH_COLOR_VARS, HEALTH_LABELS, type ProjectHealth } from "@/lib/project-health";
+import { type ProjectHealth } from "@/lib/project-health";
+import { HealthBadge } from "@/components/projects/health-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -303,17 +304,10 @@ export default function DashboardPage() {
                       </div>
 
                       <div className="space-y-1">
-                        <span
-                          className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium"
-                          title={project.reason}
-                          style={{
-                            color: `var(${HEALTH_COLOR_VARS[project.health as ProjectHealth]})`,
-                            backgroundColor: `color-mix(in oklch, var(${HEALTH_COLOR_VARS[project.health as ProjectHealth]}), transparent 88%)`,
-                          }}
-                        >
-                          <span className="size-1.5 rounded-full bg-current" />
-                          {HEALTH_LABELS[project.health as ProjectHealth]}
-                        </span>
+                        <HealthBadge
+                          health={project.health as ProjectHealth}
+                          reason={project.reason}
+                        />
                         <h2 className="flex items-center gap-1 font-semibold tracking-tight">
                           {project.pinnedAt && (
                             <Pin className="text-muted-foreground size-3.5 shrink-0" />

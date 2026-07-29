@@ -192,6 +192,14 @@ export const projectsRouter = router({
         ...project,
         lead: lead ?? null,
         members,
+        // Same call the board makes, so the badge on this page can't disagree
+        // with the badge on the card that linked here.
+        ...projectHealth({
+          overdue: totals.overdue,
+          total: totals.total,
+          done: totals.done,
+          targetDate: project.targetDate,
+        }),
         stats: {
           ...totals,
           percentComplete:
