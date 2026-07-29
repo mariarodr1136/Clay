@@ -1,6 +1,7 @@
 import { router } from "../trpc";
 import { agentRouter } from "./agent";
 import { commentsRouter } from "./comments";
+import { foldersRouter } from "./folders";
 import { importRouter } from "./import";
 import { membersRouter } from "./members";
 import { projectsRouter } from "./projects";
@@ -12,6 +13,7 @@ import { viewsRouter } from "./views";
 export const appRouter = router({
   agent: agentRouter,
   comments: commentsRouter,
+  folders: foldersRouter,
   import: importRouter,
   members: membersRouter,
   projects: projectsRouter,

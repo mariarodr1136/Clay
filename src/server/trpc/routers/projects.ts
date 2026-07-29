@@ -2,7 +2,7 @@ import { z } from "zod";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { router, protectedProcedure, ownerProcedure } from "../trpc";
 import { db } from "@/server/db/client";
-import { projects, tasks, users } from "@/server/db/schema";
+import { projects, tasks, users, projectFolders } from "@/server/db/schema";
 import { seedSampleData, seedSampleHistory } from "@/server/db/seed-sample-data";
 import { seedSampleViews } from "@/server/db/seed-sample-views";
 import { ConflictError, NotFoundError } from "@/server/errors";
@@ -23,6 +23,7 @@ export const projectsRouter = router({
         id: projects.id,
         name: projects.name,
         description: projects.description,
+        folderId: projects.folderId,
         createdAt: projects.createdAt,
         total: sql<number>`count(${tasks.id})::int`,
         done: sql<number>`count(*) filter (where ${tasks.status} = 'done')::int`,
@@ -128,6 +129,37 @@ export const projectsRouter = router({
 
   // Deleting a project takes every teammate's tasks with it, so it is
   // owner-only in a shared workspace.
+  // Moving a project between folders, or out of one entirely. Null is a
+  // legitimate destination, not a missing value.
+  move: protectedProcedure
+    .input(
+      z.object({
+        projectId: z.string().uuid(),
+        folderId: z.string().uuid().nullable(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.folderId) {
+        // A folder id from another workspace must not become reachable by
+        // routing a project into it.
+        const folder = await db.query.projectFolders.findFirst({
+          where: and(
+            eq(projectFolders.id, input.folderId),
+            eq(projectFolders.organizationId, ctx.organizationId)
+          ),
+        });
+        if (!folder) throw new NotFoundError("Folder");
+      }
+
+      const [updated] = await db
+        .update(projects)
+        .set({ folderId: input.folderId, updatedAt: new Date() })
+        .where(and(eq(projects.id, input.projectId), eq(projects.organizationId, ctx.organizationId)))
+        .returning();
+      if (!updated) throw new NotFoundError("Project");
+      return updated;
+    }),
+
   delete: ownerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {

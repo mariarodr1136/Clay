@@ -10,10 +10,12 @@ import {
   agentMessages,
   views,
   viewVersions,
+  projectFolders,
 } from "./schema";
 import { eq } from "drizzle-orm";
 import {
   sampleComments,
+  sampleFolders,
   sampleConversations,
   sampleProjects,
   sampleTeammates,
@@ -86,6 +88,18 @@ export async function seedSampleData(
   const ownerFor = (task: SampleTask) =>
     task.owner === undefined ? null : options.withTeammates ? teammateIds[task.owner] : userId;
 
+  const insertedFolders = await db
+    .insert(projectFolders)
+    .values(
+      sampleFolders.map((folder, index) => ({
+        organizationId,
+        name: folder.name,
+        colorVar: folder.colorVar,
+        orderIndex: index,
+      }))
+    )
+    .returning();
+
   const insertedProjects = await db
     .insert(projects)
     .values(
@@ -100,6 +114,8 @@ export async function seedSampleData(
           options.withTeammates && project.lead !== undefined
             ? teammateIds[project.lead]
             : null,
+        folderId:
+          project.folder === undefined ? null : insertedFolders[project.folder].id,
         targetDate:
           project.targetInDays === undefined
             ? null

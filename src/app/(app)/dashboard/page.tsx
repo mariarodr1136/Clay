@@ -15,6 +15,12 @@ import {
   Sparkles,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
+import {
+  FolderMenu,
+  MoveProjectMenu,
+  NewFolderButton,
+  type Folder,
+} from "@/components/projects/folder-controls";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -167,11 +173,13 @@ function OnboardingHero({
 export default function DashboardPage() {
   const utils = trpc.useUtils();
   const projectsQuery = trpc.projects.listWithStats.useQuery();
+  const foldersQuery = trpc.folders.list.useQuery();
   const [open, setOpen] = useState(false);
 
   const invalidate = () => {
     utils.projects.listWithStats.invalidate();
     utils.projects.list.invalidate();
+    utils.folders.list.invalidate();
   };
 
   const createProject = trpc.projects.create.useMutation({
@@ -199,6 +207,25 @@ export default function DashboardPage() {
   });
 
   const projects = projectsQuery.data ?? [];
+  const folders: Folder[] = foldersQuery.data ?? [];
+
+  // Folders in their configured order, then whatever isn't in one. Empty
+  // folders still appear — a folder you just made shouldn't look like it
+  // failed to save.
+  const groups = [
+    ...folders.map((folder) => ({
+      key: folder.id,
+      folder,
+      projects: projects.filter((project) => project.folderId === folder.id),
+    })),
+    {
+      key: "__ungrouped__",
+      folder: null,
+      projects: projects.filter(
+        (project) => !folders.some((folder) => folder.id === project.folderId)
+      ),
+    },
+  ].filter((group) => group.folder !== null || group.projects.length > 0);
   const totals = projects.reduce(
     (acc, p) => ({
       total: acc.total + p.total,
@@ -218,6 +245,8 @@ export default function DashboardPage() {
             Everything you&apos;re tracking, in one place.
           </p>
         </div>
+        <div className="flex items-center gap-2">
+        {projects.length > 0 && <NewFolderButton folderCount={folders.length} />}
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -269,6 +298,7 @@ export default function DashboardPage() {
             </Form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {projectsQuery.isLoading && <p className="text-muted-foreground text-sm">Loading…</p>}
@@ -299,8 +329,35 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {projects.map((project) => {
+          {groups.map((group) => (
+            <section key={group.key} className="space-y-3">
+              {group.folder ? (
+                <div className="flex items-center gap-2">
+                  <span
+                    className="size-2.5 rounded-full"
+                    style={{
+                      backgroundColor: `var(${group.folder.colorVar ?? "--chart-1"})`,
+                    }}
+                  />
+                  <h2 className="text-sm font-semibold tracking-tight">{group.folder.name}</h2>
+                  <span className="text-muted-foreground text-xs">
+                    {group.projects.length}
+                  </span>
+                  <FolderMenu folder={group.folder} />
+                </div>
+              ) : (
+                // Only worth a heading once there's something to contrast
+                // it with — an unfoldered workspace shouldn't grow a
+                // "No folder" label out of nowhere.
+                folders.length > 0 && (
+                  <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                    No folder
+                  </h2>
+                )
+              )}
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {group.projects.map((project) => {
               const percentDone =
                 project.total === 0 ? 0 : Math.round((project.done / project.total) * 100);
               const color = avatarColor(project.name);
@@ -315,11 +372,19 @@ export default function DashboardPage() {
                         >
                           {project.name.slice(0, 1).toUpperCase()}
                         </span>
-                        {project.overdue > 0 && (
-                          <span className="text-destructive text-[11px] font-medium">
-                            {project.overdue} overdue
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {project.overdue > 0 && (
+                            <span className="text-destructive text-[11px] font-medium">
+                              {project.overdue} overdue
+                            </span>
+                          )}
+                          <MoveProjectMenu
+                            projectId={project.id}
+                            projectName={project.name}
+                            folderId={project.folderId}
+                            folders={folders}
+                          />
+                        </div>
                       </div>
 
                       <div className="space-y-1">
@@ -358,7 +423,9 @@ export default function DashboardPage() {
                 </Link>
               );
             })}
-          </div>
+              </div>
+            </section>
+          ))}
         </>
       )}
     </div>

@@ -42,9 +42,18 @@ export type SampleTask = {
   openedDaysAgo?: number;
 };
 
+// Folders the sample projects are grouped into, in display order.
+export const sampleFolders = [
+  { name: "Customer facing", colorVar: "--chart-1" },
+  { name: "Platform", colorVar: "--chart-3" },
+] as const;
+
 export type SampleProject = {
   name: string;
   description: string;
+  // Index into sampleFolders. Left off for projects that sit outside every
+  // folder, which any real workspace has some of.
+  folder?: number;
   // Index into sampleTeammates. The lead shows in the project header.
   lead?: number;
   // Days from today the project is aiming to land.
@@ -55,6 +64,7 @@ export type SampleProject = {
 export const sampleProjects: SampleProject[] = [
   {
     name: "Website Relaunch",
+    folder: 0,
     lead: 0,
     targetInDays: 14,
     description: "Rebuild the marketing site and ship the new pricing page.",
@@ -73,6 +83,7 @@ export const sampleProjects: SampleProject[] = [
   },
   {
     name: "Mobile App v2",
+    folder: 0,
     lead: 3,
     targetInDays: 45,
     description: "Offline mode, a faster sync engine, and a refreshed shell.",
@@ -90,6 +101,7 @@ export const sampleProjects: SampleProject[] = [
   },
   {
     name: "Billing Migration",
+    folder: 1,
     lead: 1,
     targetInDays: 21,
     description: "Move off the legacy biller without dropping a single invoice.",
@@ -105,6 +117,7 @@ export const sampleProjects: SampleProject[] = [
   },
   {
     name: "Customer Onboarding",
+    folder: 0,
     lead: 2,
     targetInDays: 60,
     description: "Cut time-to-first-value from days to under an hour.",
@@ -119,6 +132,7 @@ export const sampleProjects: SampleProject[] = [
   },
   {
     name: "Data Platform",
+    folder: 1,
     lead: 3,
     targetInDays: 30,
     description: "One warehouse, one set of definitions, no more spreadsheet forks.",

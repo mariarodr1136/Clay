@@ -1,6 +1,7 @@
 export * from "./organizations";
 export * from "./users";
 export * from "./memberships";
+export * from "./project-folders";
 export * from "./projects";
 export * from "./tasks";
 export * from "./comments";

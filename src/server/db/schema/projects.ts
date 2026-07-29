@@ -1,6 +1,7 @@
 import { pgTable, text, timestamp, uuid, date, index } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { users } from "./users";
+import { projectFolders } from "./project-folders";
 
 export const projects = pgTable(
   "projects",
@@ -15,6 +16,10 @@ export const projects = pgTable(
     // Both optional: plenty of projects have neither, and forcing a lead
     // would make creating one a two-step affair.
     leadId: text("lead_id").references(() => users.id, { onDelete: "set null" }),
+    // Optional grouping. Deleting a folder must never delete the work
+    // inside it, so this nulls out rather than cascading — the projects
+    // simply become ungrouped again.
+    folderId: uuid("folder_id").references(() => projectFolders.id, { onDelete: "set null" }),
     targetDate: date("target_date"),
     createdBy: text("created_by")
       .notNull()
