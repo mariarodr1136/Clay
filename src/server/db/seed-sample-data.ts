@@ -1,179 +1,162 @@
 import { db } from "./client";
-import { projects, tasks, activityLog } from "./schema";
+import { projects, tasks, activityLog, comments, memberships, users } from "./schema";
+import {
+  sampleComments,
+  sampleProjects,
+  sampleTeammates,
+  type SampleTask,
+} from "@/fixtures/sample-workspace";
 
-// Realistic starter data for a brand-new organization, so a fresh sign-up
-// immediately sees a credible "before" app instead of an empty screen.
-export async function seedSampleData(organizationId: string, userId: string) {
-  const [project] = await db
-    .insert(projects)
-    .values({
-      organizationId,
-      name: "Website Relaunch",
-      description: "Rebuild the marketing site and ship the new pricing page.",
-      createdBy: userId,
-    })
-    .returning();
-
-  const today = new Date();
-  const daysFromNow = (n: number) => {
-    const d = new Date(today);
-    d.setDate(d.getDate() + n);
-    return d.toISOString().slice(0, 10);
-  };
-
-  const seedTasks = [
-    // Finished work first, oldest to newest. A sample workspace with one
-    // completed task has no delivery history, which leaves velocity, cycle
-    // time and completions with a single bar each and a KPI trend with
-    // nothing to compare against.
-    {
-      title: "Pick a CMS and get sign-off",
-      description: "Shortlist three, cost them out, agree with marketing.",
-      status: "done" as const,
-      priority: "high" as const,
-      dueDate: daysFromNow(-40),
-      orderIndex: 0,
-      points: 5,
-    },
-    {
-      title: "Move DNS to the new provider",
-      description: "Cut over records with a short TTL, keep the old zone warm.",
-      status: "done" as const,
-      priority: "medium" as const,
-      dueDate: daysFromNow(-33),
-      orderIndex: 1,
-      points: 3,
-    },
-    {
-      title: "Agree the new sitemap",
-      description: "Collapse the old nav from nine sections to five.",
-      status: "done" as const,
-      priority: "medium" as const,
-      dueDate: daysFromNow(-26),
-      orderIndex: 2,
-      points: 8,
-    },
-    {
-      title: "Audit current site content",
-      description: "Inventory pages, flag anything stale or off-brand.",
-      status: "done" as const,
-      priority: "medium" as const,
-      dueDate: daysFromNow(-19),
-      orderIndex: 3,
-      points: 8,
-    },
-    {
-      title: "Rebuild the component library",
-      description: "Buttons, forms, cards — everything the new pages need.",
-      status: "done" as const,
-      priority: "high" as const,
-      dueDate: daysFromNow(-6),
-      orderIndex: 4,
-      points: 13,
-    },
-    {
-      title: "Design new pricing page",
-      description: "Three-tier layout, monthly/annual toggle.",
-      status: "in_review" as const,
-      priority: "high" as const,
-      dueDate: daysFromNow(-1),
-      orderIndex: 5,
-      points: 5,
-    },
-    {
-      title: "Migrate blog to new CMS",
-      description: null,
-      status: "in_progress" as const,
-      priority: "medium" as const,
-      dueDate: daysFromNow(4),
-      orderIndex: 6,
-      points: 8,
-    },
-    {
-      title: "Set up staging environment",
-      description: "Mirror prod infra, point at the new DB.",
-      status: "in_progress" as const,
-      priority: "urgent" as const,
-      dueDate: daysFromNow(2),
-      orderIndex: 7,
-      points: 3,
-    },
-    {
-      title: "Write launch announcement",
-      description: null,
-      status: "todo" as const,
-      priority: "low" as const,
-      dueDate: daysFromNow(10),
-      orderIndex: 8,
-      points: 2,
-    },
-    {
-      title: "QA pass on mobile breakpoints",
-      description: "iOS Safari and Android Chrome at minimum.",
-      status: "todo" as const,
-      priority: "high" as const,
-      dueDate: daysFromNow(7),
-      orderIndex: 9,
-      points: 3,
-    },
-    {
-      title: "Fix broken redirects from old URLs",
-      description: null,
-      status: "todo" as const,
-      priority: "urgent" as const,
-      dueDate: daysFromNow(-2),
-      orderIndex: 10,
-      points: 2,
-    },
-  ];
-
-  // Spread the timestamps over the past couple of months instead of stamping
-  // everything with "now".
+export type SeedOptions = {
+  // Creates the fictional teammates and spreads the work across them.
   //
-  // Every time-series query in the catalog buckets by week or day —
-  // velocity, cycle time, completions, created-vs-completed — so a workspace
-  // seeded all at one instant collapses every one of them to a single bar,
-  // and a KPI trend has nothing to compare against. The sample workspace is
-  // the first thing a demo visitor and a new signup see, so its charts have
-  // to look like charts.
-  const weekAgo = (weeks: number) => {
-    const d = new Date();
-    d.setDate(d.getDate() - weeks * 7);
-    return d;
-  };
+  // On for /demo, where a one-person workspace would leave the workload
+  // charts, assignee filters and comment threads with nothing to show. Off
+  // for a real user clicking "load sample workspace", because invented
+  // colleagues would sit in their member list and assignee picker forever.
+  withTeammates?: boolean;
+};
 
-  const insertedTasks = await db
-    .insert(tasks)
+const DAY_MS = 86_400_000;
+
+function daysAgo(n: number): Date {
+  return new Date(Date.now() - n * DAY_MS);
+}
+
+function isoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+// Everything in the fixture is expressed relative to today, so a workspace
+// seeded now and one seeded in six months both look freshly worked in.
+function taskTimestamps(task: SampleTask) {
+  if (task.status === "done") {
+    const completedAt = daysAgo((task.doneWeeksAgo ?? 1) * 7);
+    return {
+      createdAt: new Date(completedAt.getTime() - (task.cycleDays ?? 5) * DAY_MS),
+      // The completion-based queries (velocity, cycle time, completions)
+      // all read updatedAt as the finish time.
+      updatedAt: completedAt,
+    };
+  }
+  const openedAt = daysAgo(task.openedDaysAgo ?? 3);
+  return { createdAt: openedAt, updatedAt: openedAt };
+}
+
+export async function seedSampleData(
+  organizationId: string,
+  userId: string,
+  options: SeedOptions = {}
+) {
+  // Ids are namespaced per workspace: two demo visitors must never share a
+  // teammate row, since deleting one workspace would take the other's
+  // assignees with it.
+  const teammateIds = sampleTeammates.map(
+    (mate) => `seed_${mate.key}_${organizationId.slice(0, 8)}`
+  );
+
+  if (options.withTeammates) {
+    await db.insert(users).values(
+      sampleTeammates.map((mate, index) => ({
+        id: teammateIds[index],
+        email: mate.email,
+        name: mate.name,
+      }))
+    );
+    await db
+      .insert(memberships)
+      .values(teammateIds.map((id) => ({ organizationId, userId: id, role: "member" as const })));
+  }
+
+  // Without teammates every task falls to the person seeding, which keeps
+  // assignee-shaped views working rather than empty.
+  const ownerFor = (task: SampleTask) =>
+    task.owner === undefined ? null : options.withTeammates ? teammateIds[task.owner] : userId;
+
+  const insertedProjects = await db
+    .insert(projects)
     .values(
-      seedTasks.map((t, index) => {
-        // Done tasks land in successive past weeks, so velocity and cycle
-        // time have a real series; open work is recent, as it would be.
-        const completedWeeksAgo = 6 - index;
-        const finished = t.status === "done";
-        return {
-          ...t,
-          organizationId,
-          projectId: project.id,
-          assigneeId: userId,
-          createdBy: userId,
-          createdAt: weekAgo(finished ? completedWeeksAgo + 2 : 1),
-          // updatedAt is what the completion-based queries read.
-          updatedAt: finished ? weekAgo(Math.max(completedWeeksAgo, 0)) : weekAgo(0),
-        };
-      })
+      sampleProjects.map((project) => ({
+        organizationId,
+        name: project.name,
+        description: project.description,
+        createdBy: userId,
+        createdAt: daysAgo(90),
+      }))
     )
     .returning();
 
-  await db.insert(activityLog).values(
-    insertedTasks.map((t) => ({
-      organizationId,
-      actorId: userId,
-      verb: "task.created",
-      entityType: "task",
-      entityId: t.id,
-      metadata: { title: t.title },
-    }))
+  const taskRows = sampleProjects.flatMap((project, projectIndex) =>
+    project.tasks.map((task, taskIndex) => {
+      const { createdAt, updatedAt } = taskTimestamps(task);
+      return {
+        organizationId,
+        projectId: insertedProjects[projectIndex].id,
+        title: task.title,
+        description: task.description ?? null,
+        status: task.status,
+        priority: task.priority,
+        points: task.points,
+        assigneeId: ownerFor(task),
+        dueDate: task.dueInDays === undefined ? null : isoDate(daysAgo(-task.dueInDays)),
+        orderIndex: taskIndex,
+        createdBy: userId,
+        createdAt,
+        updatedAt,
+      };
+    })
   );
 
-  return project;
+  const insertedTasks = await db.insert(tasks).values(taskRows).returning();
+  const taskByTitle = new Map(insertedTasks.map((task) => [task.title, task]));
+
+  const commentRows = sampleComments.flatMap((comment) => {
+    const task = taskByTitle.get(comment.taskTitle);
+    if (!task) return [];
+    return [
+      {
+        organizationId,
+        taskId: task.id,
+        authorId: options.withTeammates ? teammateIds[comment.author] : userId,
+        body: comment.body,
+        createdAt: daysAgo(2),
+      },
+    ];
+  });
+  if (commentRows.length > 0) await db.insert(comments).values(commentRows);
+
+  // The activity feed reads this table. Timestamps mirror each task's own
+  // history so the feed reads as a record of work rather than of seeding:
+  // creation when it was created, and a status change when it finished.
+  const activity = insertedTasks.flatMap((task) => {
+    const actor = task.assigneeId ?? userId;
+    const rows = [
+      {
+        organizationId,
+        actorId: actor,
+        verb: "task.created",
+        entityType: "task",
+        entityId: task.id,
+        metadata: { title: task.title } as Record<string, unknown>,
+        createdAt: task.createdAt,
+      },
+    ];
+    if (task.status === "done") {
+      rows.push({
+        organizationId,
+        actorId: actor,
+        verb: "task.status_changed",
+        entityType: "task",
+        entityId: task.id,
+        metadata: { status: "done" },
+        createdAt: task.updatedAt,
+      });
+    }
+    return rows;
+  });
+
+  await db.insert(activityLog).values(activity);
+
+  // The first project is what callers hand to the agent as context.
+  return insertedProjects[0];
 }

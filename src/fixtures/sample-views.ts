@@ -253,5 +253,277 @@ export function buildDemoViews(projectId: string): SampleViewFixture[] {
         ],
       },
     },
+    {
+      key: "team-workload",
+      prompt: "Who is carrying what right now, and who is closest to overloaded?",
+      name: "Team Workload",
+      schema: {
+        name: "Team Workload",
+        scope: "personal",
+        layout: {
+          widgets: [
+            { id: "openTotal", x: 0, y: 0, w: 3, h: 2 },
+            { id: "unassigned", x: 3, y: 0, w: 3, h: 2 },
+            { id: "workloadChart", x: 6, y: 0, w: 6, h: 4 },
+            { id: "activeTable", x: 0, y: 2, w: 6, h: 4 },
+          ],
+        },
+        widgets: [
+          {
+            id: "openTotal",
+            type: "kpi",
+            title: "Open work",
+            dataBinding: { queryId: "tasksList", params: { open: true, limit: 200 } },
+            config: { aggregate: "count", label: "Open tasks", format: "number" },
+          },
+          {
+            id: "unassigned",
+            type: "kpi",
+            title: "Story points open",
+            dataBinding: { queryId: "tasksList", params: { open: true, limit: 200 } },
+            config: {
+              aggregate: "sum",
+              field: "points",
+              label: "Points in flight",
+              format: "number",
+              note: "across every project",
+            },
+          },
+          {
+            id: "workloadChart",
+            type: "chart",
+            title: "Open work per person",
+            dataBinding: { queryId: "openTasksByAssignee", params: {} },
+            config: { chartType: "stackedBar", xField: "assignee", series: statusSeries },
+          },
+          {
+            // statusActions turns each row's status into a live dropdown —
+            // the write path a person can drive from a generated view.
+            id: "activeTable",
+            type: "table",
+            title: "In flight",
+            dataBinding: { queryId: "tasksList", params: { status: "in_progress", limit: 25 } },
+            config: {
+              statusActions: true,
+              columns: [
+                { key: "title", label: "Task" },
+                { key: "status", label: "Status", kind: "status" },
+                { key: "priority", label: "Priority", kind: "priority" },
+                { key: "points", label: "Pts", kind: "number" },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    {
+      key: "velocity-and-flow",
+      prompt: "How fast are we going, and is our cycle time getting better or worse?",
+      name: "Velocity & Flow",
+      schema: {
+        name: "Velocity & Flow",
+        scope: "personal",
+        layout: {
+          widgets: [
+            { id: "velocityKpi", x: 0, y: 0, w: 3, h: 2 },
+            { id: "cycleKpi", x: 3, y: 0, w: 3, h: 2 },
+            { id: "velocityChart", x: 6, y: 0, w: 6, h: 3 },
+            { id: "flowChart", x: 0, y: 2, w: 6, h: 3 },
+            { id: "cycleChart", x: 6, y: 3, w: 6, h: 3 },
+          ],
+        },
+        widgets: [
+          {
+            id: "velocityKpi",
+            type: "kpi",
+            title: "Velocity",
+            dataBinding: { queryId: "velocityByWeek", params: { weeks: 12 } },
+            config: {
+              aggregate: "sum",
+              field: "points",
+              label: "Points shipped",
+              format: "number",
+              trend: { field: "points", goodDirection: "up" },
+            },
+          },
+          {
+            // goodDirection down: cycle time climbing is bad news, so the
+            // same arrow shape means the opposite thing here.
+            id: "cycleKpi",
+            type: "kpi",
+            title: "Cycle time",
+            dataBinding: { queryId: "cycleTimeByWeek", params: { weeks: 12 } },
+            config: {
+              aggregate: "avg",
+              field: "avgDays",
+              label: "Avg days to done",
+              format: "number",
+              trend: { field: "avgDays", goodDirection: "down" },
+            },
+          },
+          {
+            id: "velocityChart",
+            type: "chart",
+            title: "Velocity by week",
+            dataBinding: { queryId: "velocityByWeek", params: { weeks: 12 } },
+            config: {
+              chartType: "bar",
+              xField: "week",
+              series: [{ key: "points", label: "Points", colorVar: "--chart-1" }],
+            },
+          },
+          {
+            id: "flowChart",
+            type: "chart",
+            title: "Created vs completed",
+            dataBinding: { queryId: "createdVsCompleted", params: { days: 60 } },
+            config: {
+              chartType: "line",
+              xField: "day",
+              series: [
+                { key: "created", label: "Created", colorVar: "--chart-2" },
+                { key: "completed", label: "Completed", colorVar: "--chart-1" },
+              ],
+            },
+          },
+          {
+            id: "cycleChart",
+            type: "chart",
+            title: "Cycle time by week",
+            dataBinding: { queryId: "cycleTimeByWeek", params: { weeks: 12 } },
+            config: { chartType: "area", xField: "week", yField: "avgDays" },
+          },
+        ],
+      },
+    },
+    {
+      key: "portfolio",
+      prompt: "Show me the whole portfolio: where the effort sits and what is stalling",
+      name: "Portfolio Health",
+      schema: {
+        name: "Portfolio Health",
+        scope: "personal",
+        layout: {
+          widgets: [
+            { id: "projectFilter", x: 0, y: 0, w: 12, h: 1 },
+            { id: "effortDonut", x: 0, y: 1, w: 5, h: 3 },
+            { id: "agingChart", x: 5, y: 1, w: 7, h: 3 },
+            { id: "byPriority", x: 0, y: 4, w: 5, h: 3 },
+            { id: "stalled", x: 5, y: 4, w: 7, h: 3 },
+          ],
+        },
+        widgets: [
+          {
+            // Other widgets read this selection through "$filter:project".
+            id: "projectFilter",
+            type: "filterBar",
+            config: {
+              filterKey: "project",
+              label: "Project",
+              options: [{ label: "Everything", value: "" }],
+            },
+          },
+          {
+            id: "effortDonut",
+            type: "chart",
+            title: "Where the effort is",
+            dataBinding: { queryId: "pointsByProject", params: {} },
+            config: {
+              chartType: "donut",
+              donut: { nameField: "project", valueField: "points", centerLabel: "Open points" },
+            },
+          },
+          {
+            id: "agingChart",
+            type: "chart",
+            title: "How long open work has been open",
+            dataBinding: { queryId: "agingWip", params: {} },
+            config: {
+              chartType: "bar",
+              xField: "bucket",
+              series: [{ key: "count", label: "Tasks", colorVar: "--chart-3" }],
+            },
+          },
+          {
+            id: "byPriority",
+            type: "chart",
+            title: "By priority",
+            dataBinding: { queryId: "tasksByPriorityCount", params: {} },
+            config: {
+              chartType: "bar",
+              xField: "priority",
+              series: [{ key: "count", label: "Tasks", colorVar: "--chart-4" }],
+            },
+          },
+          {
+            id: "stalled",
+            type: "table",
+            title: "Oldest open work",
+            dataBinding: { queryId: "tasksList", params: { open: true, limit: 15 } },
+            config: {
+              columns: [
+                { key: "title", label: "Task" },
+                { key: "status", label: "Status", kind: "status" },
+                { key: "priority", label: "Priority", kind: "priority" },
+                { key: "dueDate", label: "Due", kind: "date" },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    {
+      key: "activity",
+      prompt: "What has the team actually been doing lately?",
+      name: "Recent Activity",
+      schema: {
+        name: "Recent Activity",
+        scope: "personal",
+        layout: {
+          widgets: [
+            { id: "note", x: 0, y: 0, w: 12, h: 1 },
+            { id: "perPerson", x: 0, y: 1, w: 6, h: 3 },
+            { id: "feed", x: 6, y: 1, w: 6, h: 3 },
+          ],
+        },
+        widgets: [
+          {
+            id: "note",
+            type: "text",
+            config: {
+              content:
+                "Every task created, moved, assigned or rescheduled is recorded — this reads that log.",
+            },
+          },
+          {
+            id: "perPerson",
+            type: "chart",
+            title: "Activity per person",
+            dataBinding: { queryId: "activityByUser", params: { days: 30 } },
+            config: {
+              chartType: "stackedBar",
+              xField: "actor",
+              series: [
+                { key: "created", label: "Created", colorVar: "--chart-1" },
+                { key: "statusChanges", label: "Moved", colorVar: "--chart-2" },
+              ],
+            },
+          },
+          {
+            id: "feed",
+            type: "table",
+            title: "Latest",
+            dataBinding: { queryId: "recentActivity", params: { days: 30, limit: 20 } },
+            config: {
+              columns: [
+                { key: "actor", label: "Who" },
+                { key: "task", label: "Task" },
+                { key: "at", label: "When", kind: "date" },
+              ],
+            },
+          },
+        ],
+      },
+    },
   ];
 }

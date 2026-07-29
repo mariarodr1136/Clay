@@ -39,7 +39,12 @@ export async function createGuestWorkspace(): Promise<GuestSession> {
 
   // Seeded outside the transaction: these helpers are the same ones a real
   // user's "Load sample workspace" button calls, and they open their own.
-  const project = await seedSampleData(organizationId, userId);
+  //
+  // withTeammates only here. A demo visitor should meet the product at full
+  // stretch — workload split across a team, comment threads with more than
+  // one voice — while a real user opting into sample data shouldn't inherit
+  // invented colleagues in their member list.
+  const project = await seedSampleData(organizationId, userId, { withTeammates: true });
   await seedSampleViews(organizationId, userId, project.id);
 
   return { userId, organizationId };
