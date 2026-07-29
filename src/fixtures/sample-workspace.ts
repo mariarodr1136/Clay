@@ -136,7 +136,7 @@ export const sampleProjects: SampleProject[] = [
       { title: "Sample data on first sign-in", status: "done", priority: "medium", points: 5, owner: 0, doneWeeksAgo: 1, cycleDays: 6 },
       { title: "In-app checklist widget", tags: ["frontend", "onboarding"], status: "in_progress", priority: "medium", points: 8, owner: 2, dueInDays: 9, openedDaysAgo: 13 },
       { title: "Rewrite the welcome email sequence", status: "todo", priority: "low", points: 3, owner: 4, dueInDays: 18, openedDaysAgo: 6 },
-      { title: "Track activation in the funnel dashboard", status: "todo", priority: "medium", points: 5, dueInDays: -1, openedDaysAgo: 15 },
+      { title: "Track activation in the funnel dashboard", status: "todo", priority: "medium", points: 5, dueInDays: 4, openedDaysAgo: 15 },
     ],
   },
   {

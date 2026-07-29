@@ -17,15 +17,29 @@ describe("projectHealth", () => {
     expect(verdict.reason).toBe("No tasks yet");
   });
 
-  it("is at risk with a little overdue work", () => {
-    expect(projectHealth({ ...base, overdue: 1 }).health).toBe("at_risk");
+  it("tolerates a single late task", () => {
+    // One overdue item is an ordinary week. Flagging it made almost every
+    // project read "at risk", which is the same as saying nothing.
+    const verdict = projectHealth({ ...base, overdue: 1 });
+    expect(verdict.health).toBe("on_track");
+    expect(verdict.reason).toMatch(/one task running late/);
+  });
+
+  it("is at risk once a second task slips", () => {
     expect(projectHealth({ ...base, overdue: 2 }).health).toBe("at_risk");
   });
 
-  it("is off track once overdue work piles up, deadline or not", () => {
-    const verdict = projectHealth({ ...base, overdue: 3 });
+  it("is off track when overdue work is a real share of what's left", () => {
+    // 3 of 5 open.
+    const verdict = projectHealth({ ...base, overdue: 3, total: 10, done: 5 });
     expect(verdict.health).toBe("off_track");
-    expect(verdict.reason).toBe("3 overdue tasks");
+    expect(verdict.reason).toBe("3 of 5 open tasks overdue");
+  });
+
+  it("does not call a large project off track for the same absolute count", () => {
+    // 3 of 40 open is a different project from 3 of 5, and the badge should
+    // say so.
+    expect(projectHealth({ ...base, overdue: 3, total: 50, done: 10 }).health).toBe("at_risk");
   });
 
   it("is off track past its target with work still open", () => {

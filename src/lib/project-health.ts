@@ -29,6 +29,16 @@ const DAY_MS = 86_400_000;
 const CLOSE_TO_TARGET_DAYS = 14;
 // Below this at that point, the remaining work stops looking routine.
 const BEHIND_PERCENT = 70;
+// One late task is a normal week, not a project in trouble. Two is a
+// pattern. The earlier rule flagged anything with a single overdue item,
+// which meant almost everything read as at risk and the badge stopped
+// carrying information.
+const AT_RISK_OVERDUE = 2;
+// And a pile of overdue work only means off track if it's a real share of
+// what's left — three late tasks out of forty is not the same project as
+// three out of five.
+const OFF_TRACK_OVERDUE = 3;
+const OFF_TRACK_OVERDUE_SHARE = 1 / 3;
 
 export function projectHealth(input: HealthInput): HealthVerdict {
   const { overdue, total, done, targetDate } = input;
@@ -48,12 +58,20 @@ export function projectHealth(input: HealthInput): HealthVerdict {
   }
 
   // Enough overdue work is its own problem, regardless of the target date —
-  // a project with no deadline can still be visibly failing.
-  if (overdue >= 3) {
-    return { health: "off_track", reason: `${overdue} overdue tasks` };
+  // a project with no deadline can still be visibly failing. Judged as a
+  // share of what's still open, so a big project isn't condemned by the
+  // same absolute count that would sink a small one.
+  const open = Math.max(total - done, 0);
+  const overdueShare = open === 0 ? 0 : overdue / open;
+
+  if (overdue >= OFF_TRACK_OVERDUE && overdueShare >= OFF_TRACK_OVERDUE_SHARE) {
+    return {
+      health: "off_track",
+      reason: `${overdue} of ${open} open ${plural(open, "task")} overdue`,
+    };
   }
 
-  if (overdue > 0) {
+  if (overdue >= AT_RISK_OVERDUE) {
     return {
       health: "at_risk",
       reason: `${overdue} overdue ${plural(overdue, "task")}`,
@@ -73,7 +91,12 @@ export function projectHealth(input: HealthInput): HealthVerdict {
 
   return {
     health: "on_track",
-    reason: total === 0 ? "No tasks yet" : `${percentComplete}% done, nothing overdue`,
+    reason:
+      total === 0
+        ? "No tasks yet"
+        : overdue === 0
+          ? `${percentComplete}% done, nothing overdue`
+          : `${percentComplete}% done, one task running late`,
   };
 }
 
