@@ -20,12 +20,14 @@ env:
   # publishable key decodes to "example.clerk.accounts.dev$", the shape Clerk
   # expects.
   #
-  # This is also why `npm run test:e2e` is not part of CI. It drives real
-  # browser navigations, and on a development instance Clerk answers those
-  # with a handshake against its own domain — which a fake instance cannot
-  # serve, so every page load fails with a 400. Running it here would need
-  # real Clerk keys as repository secrets (and would then be unavailable to
-  # pull requests from forks, which cannot read secrets). Run it locally.
+  # `npm run test:e2e` is deliberately not a job here yet. The old blocker is
+  # gone — the suite now drives /demo, which hands out a throwaway workspace
+  # behind a signed cookie and skips Clerk entirely, so it no longer needs
+  # real keys. What's missing is evidence: Actions stopped dispatching runs
+  # for this repository, so a Postgres-service job added here could not be
+  # observed passing even once, and an unproven job on main is worse than an
+  # absent one. Run it locally with `npm run test:e2e` (9 tests, ~30s), and
+  # add the job back once a CI run is seen going green.
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
   CLERK_SECRET_KEY: sk_test_ci_dummy_value_not_a_real_secret
 

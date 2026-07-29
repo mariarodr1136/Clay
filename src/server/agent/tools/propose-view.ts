@@ -1,5 +1,7 @@
-import { queryCatalog } from "@/server/data-access/catalog";
+import { queryCatalog, timeSeriesQueryIds } from "@/server/data-access/catalog";
+import { viewErrors } from "@/lib/dsl/quality";
 import { createView, patchView } from "@/server/db/create-view";
+import { recordViewEvent, VIEW_EVENT_VERBS } from "@/server/db/view-events";
 import type { proposeViewInputSchema } from "./schemas";
 import type { z } from "zod";
 
@@ -29,6 +31,30 @@ function invalidDataBindings(schema: z.infer<typeof proposeViewInputSchema>["sch
   return errors;
 }
 
+// A refused proposal is worth recording: it is the validator visibly doing
+// its job, and it is the only trace that the attempt happened at all.
+// Never allowed to fail the tool call — the agent's feedback matters more
+// than the bookkeeping.
+async function noteBlockedProposal(
+  ctx: { organizationId: string; ownerId: string; viewId?: string },
+  name: string,
+  reasons: string[]
+) {
+  try {
+    await recordViewEvent({
+      organizationId: ctx.organizationId,
+      actorId: ctx.ownerId,
+      verb: VIEW_EVENT_VERBS.blocked,
+      // Refinements name the view they targeted; a blocked new view has no
+      // id yet, so it points at the nil uuid.
+      viewId: ctx.viewId ?? "00000000-0000-0000-0000-000000000000",
+      metadata: { name, reasons },
+    });
+  } catch (error) {
+    console.error("[agent] failed to record blocked proposal", error);
+  }
+}
+
 export async function proposeViewTool(
   // viewId comes from the calling page's context (which view the user has
   // open), never from the model's tool input — the model can't choose to
@@ -38,7 +64,19 @@ export async function proposeViewTool(
 ): Promise<{ ok: true; viewId: string; name: string } | { ok: false; error: string }> {
   const errors = invalidDataBindings(input.schema);
   if (errors.length > 0) {
+    await noteBlockedProposal(ctx, input.name, errors);
     return { ok: false, error: errors.join(" | ") };
+  }
+
+  // Structural quality, checked here rather than in the schema on purpose:
+  // rejecting a *proposal* that would render broken gives the agent feedback
+  // it can act on, while views already in the database keep parsing and
+  // rendering. Zod says "well-formed"; this says "usable".
+  const quality = viewErrors(input.schema, { timeSeriesQueryIds: timeSeriesQueryIds() });
+  if (quality.length > 0) {
+    const messages = quality.map((problem) => problem.message);
+    await noteBlockedProposal(ctx, input.name, messages);
+    return { ok: false, error: messages.join(" | ") };
   }
 
   try {

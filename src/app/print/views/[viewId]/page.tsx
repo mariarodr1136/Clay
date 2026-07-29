@@ -1,7 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { format } from "date-fns";
 import { db } from "@/server/db/client";
-import { views, viewVersions } from "@/server/db/schema";
+import { viewVersions } from "@/server/db/schema";
+import { activeView } from "@/server/db/view-access";
 import { parseView } from "@/lib/dsl/validate";
 import { verifyPrintToken } from "@/server/export/print-token";
 import { preloadViewQueries } from "@/server/export/preload";
@@ -27,7 +28,7 @@ export default async function PrintViewPage({
   }
 
   const view = await db.query.views.findFirst({
-    where: and(eq(views.id, viewId), eq(views.organizationId, payload.organizationId)),
+    where: activeView(viewId, payload.organizationId),
   });
   if (!view?.currentVersionId) {
     return <p className="text-destructive text-sm">View not found.</p>;

@@ -1,6 +1,6 @@
 # Clay
 
-![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6) ![Next.js](https://img.shields.io/badge/Next.js_16-App_Router-000000) ![React](https://img.shields.io/badge/React_19-Frontend-61DAFB) ![tRPC](https://img.shields.io/badge/tRPC-11-2596BE) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Drizzle_ORM-4169E1) ![Claude](https://img.shields.io/badge/Claude-Agent_Loop-D97757) ![Vitest](https://img.shields.io/badge/Vitest-72_tests_+_e2e-6E9F18) ![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000)
+![TypeScript](https://img.shields.io/badge/TypeScript-Strict-3178C6) ![Next.js](https://img.shields.io/badge/Next.js_16-App_Router-000000) ![React](https://img.shields.io/badge/React_19-Frontend-61DAFB) ![tRPC](https://img.shields.io/badge/tRPC-11-2596BE) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Drizzle_ORM-4169E1) ![Claude](https://img.shields.io/badge/Claude-Agent_Loop-D97757) ![Vitest](https://img.shields.io/badge/Vitest-280_tests_+_e2e-6E9F18) ![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000)
 
 A project tracker where the UI isn't fixed. Describe the dashboard you need in plain language, and an agent built on the Claude API writes it — live, against your real projects and tasks, in seconds.
 
@@ -66,15 +66,24 @@ Instead of a fixed set of dashboards and a settings menu to configure them, Clay
 - **Views that act, not just report** — a fixed, org-scoped *mutation catalog* (create task, update status, assign, set due date) mirrors the query catalog on the write side. Tables can opt into status dropdowns per row; the agent may configure them but can never execute one — writes only happen when a signed-in user clicks.
 - **Share a view with anyone** — mint an unguessable, revocable public link that renders a read-only snapshot of the view server-side. No account needed to look; no way to query anything beyond what was shared.
 - **Templates** — save any view as a reusable template and stamp out the same dashboard again in one click.
-- **A real widget vocabulary** — KPI tiles (with notes and danger intent), multi-series line/area charts, stacked bars, donuts, progress meters, filter bars, and badge-aware tables — all declarative, Zod-validated, and bound to catalog queries; never generated code.
-- **Exports that go through the catalog** — any view downloads as a multi-sheet Excel workbook (one sheet per distinct query, plus a cover sheet recording the prompt, version, and filters behind the numbers), any table as CSV, and the whole dashboard as a one-click PDF rendered by headless Chrome against the app's own print stylesheet — charts stay vector-sharp, not rasterized. Exports re-run the same org-scoped catalog queries server-side rather than dumping what the client happens to hold, so they get complete data instead of the widget's 50-row page. The demo exports for real too — same planner, same writers, against the sample fixtures.
+- **A real widget vocabulary** — KPI tiles (with notes, danger intent, and optional sparkline + period-over-period delta), multi-series line/area charts, stacked bars, donuts, progress meters, filter bars, and badge-aware tables — all declarative, Zod-validated, and bound to catalog queries; never generated code.
+- **Exports that go through the catalog** — any view downloads as a multi-sheet Excel workbook (one sheet per distinct query, plus a cover sheet recording the prompt, version, and filters behind the numbers), any table as CSV, and the whole dashboard as a one-click PDF rendered by headless Chrome against the app's own print stylesheet — charts stay vector-sharp, not rasterized. Exports re-run the same org-scoped catalog queries server-side rather than dumping what the client happens to hold, so they get complete data instead of the widget's 50-row page. The demo exports for real too, because the demo *is* the app.
+- **The demo is the product** — `/demo` doesn't render a mock. It provisions a real, seeded workspace behind a signed cookie and drops you into the ordinary app: same pages, same allow-listed catalog, same exports, same agent. The seed is a workspace mid-flight rather than a token example — eight projects across three folders with five teammates, a mix of pinned, archived, on-track and struggling work, tagged tasks, comments, saved views, and a chat history — so the product is visible at scale on the first screen. Writes land in a real database and survive a reload; the whole tenant is swept after 24 hours by a cron. There is no second renderer to keep in sync, and nothing the demo shows is something the product can't do.
+- **Trends that had to count** — a KPI tile can carry a sparkline and a "vs previous period" delta, both derived from the rows the tile is already bound to. Never authored: the schema only accepts a trend over a catalog query that returns an ordered series, so a tile cannot show an arrow the data doesn't support, and `propose_view` rejects the agent's attempt if it tries. A single period renders no trend rather than a flat line, and a change from zero shows the raw values rather than an arithmetically true but meaningless "up 100%".
 - **Versioned, never overwritten** — every agent edit (and every manual one) writes a new `view_versions` row with a parent pointer, so a view's entire prompt/edit history is always recoverable.
-- **Read-only, allow-listed agent tools** — the agent never writes SQL or touches the database directly. Its only read path is a fixed catalog of org-scoped queries (`tasksList`, `statusByProject`, `velocityByWeek`, `cycleTimeByWeek`, `createdVsCompleted`, `agingWip`, `pointsByProject`, `overdueTasks`, `upcomingTasks`, `completionsOverTime`, etc.), and every tool call is validated against a Zod schema before it runs.
+- **Read-only, allow-listed agent tools** — the agent never writes SQL or touches the database directly. Its only read path is a fixed catalog of org-scoped queries (`tasksList`, `statusByProject`, `velocityByWeek`, `cycleTimeByWeek`, `createdVsCompleted`, `agingWip`, `pointsByProject`, `overdueTasks`, `upcomingTasks`, `completionsOverTime`, `statusByFolder`, `openPointsByFolder`, `tasksByTag`, etc. — 20 in all), and every tool call is validated against a Zod schema before it runs.
+- **Query Clay from your own assistant** — Clay speaks the Model Context Protocol. Issue a revocable API token under *Connect*, point Claude Desktop (or anything else that talks MCP) at `/api/mcp`, and it gets `describe_entities`, `list_queries`, and `run_query` over the very same allow-listed catalog Clay's own agent is restricted to. Read-only by construction: the mutation catalog is not exposed, because writes in Clay happen when a signed-in person clicks. A token names one workspace, frozen at creation, and only its hash is stored — it's shown once and unrecoverable after that.
 - **Bring-your-own-key** — the chat UI takes your own Anthropic API key, held only in the browser tab and sent per-request; there's no server-side key to leak or bill against.
 - **Full audit trail** — every view created or changed in an organization shows up in the audit log, whether it was the agent or a person.
+- **Graded agent evals** — a case set pins what "good" means: does a request produce a view at all, does it bind to the right catalog query, does it answer in prose when asked a question instead of forcing a dashboard, does a refinement carry existing widgets over instead of dropping them. Structural quality is checked too — overlapping widgets, a widget running past the 12-column grid, a donut with no donut config — and `propose_view` now rejects those before persisting, so the agent gets feedback it can act on. The grader and those rules are unit tested on every commit; the live half runs on demand against a real model.
 - **Adversarial test coverage** — a dedicated security suite asserts the agent can never escalate a view to org-wide scope, can't reference an unknown widget type or catalog id, and can't write across an organization boundary even with a version id from the wrong org.
-- **Rate-limited by design** — 10 agent requests per 5-minute window per user, enforced server-side ahead of any Anthropic call, with the window state in Postgres so it holds across serverless instances and deploys.
-- **Real projects and tasks underneath** — a standard project/task tracker (status, priority, due dates, assignees, comments) sits under the generated-view layer, so there's always real data for views to bind to.
+- **Tenant isolation proven across the whole catalog** — rather than hand-picking a few queries, one suite marks every record in a second organization and then runs *every* registered catalog query — through the widget path, the export path, and with the other org's project id injected as a parameter — asserting the marker never appears. Adding a query that forgets its `organization_id` filter fails the build the moment it's registered, without anyone remembering to write a case for it. Verified by deliberately removing a filter and watching it go red.
+- **Rate-limited by design** — 10 agent requests per 5-minute window per user, enforced server-side ahead of any Anthropic call, with the window state in Postgres so it holds across serverless instances and deploys. Demo workspace creation has its own, wider per-IP budget, because an IP is not a person.
+- **Real projects and tasks underneath** — a standard project/task tracker (status, priority, due dates, assignees, comments, free-form tags) sits under the generated-view layer, so there's always real data for views to bind to. Projects carry a lead and a target date, group into colour-coded folders, pin to the top of the board, and sort by activity, progress, or how much is overdue.
+- **Project health nobody has to maintain** — every project shows *On track*, *At risk*, or *Off track*, derived from overdue work, target date, and how much is actually finished. A status someone sets by hand goes stale the day after they set it; this one can't disagree with the board it sits on, and the tooltip always says why ("43% done, one task running late"). The thresholds are deliberately not twitchy — one late task is an ordinary week, and a status that everything has is the same as no status at all. Off track additionally requires the overdue pile to be a real share of what's still open, so a forty-task project isn't condemned by the count that would sink a five-task one. The rules are pure, unit tested, and computed server-side once so the board and the project page can never disagree.
+- **Archive, don't delete** — archiving is the everyday action and is reversible; permanent deletion is owner-only, and reachable *only* for an already-archived project, so a project someone is using can't be destroyed by a stray click.
+- **⌘K everything** — one palette searches projects, views, and tasks across the workspace, and free text falls through to the agent, so "build me a delivery dashboard" is a keystroke away from anywhere in the app.
+- **Bring your existing backlog** — import tasks from a CSV or an Excel workbook (upload or paste). Columns are matched automatically where the header is recognisable, statuses and priorities are translated from the wording spreadsheets actually use ("In Progress", "P1", "Closed"), assignees are resolved against workspace members, and a dry-run preview reports every row that needs attention *before* anything is written. Both readers are hand-rolled: the CSV one round-trips this app's own export, formula-guard and all, and the .xlsx one unzips the workbook and reads the sheet XML directly — shared strings, inline strings, rich-text runs, omitted empty cells, and Excel's serial dates, which arrive as bare numbers like 46200. Proven by writing a workbook with the app's own exporter and reading it straight back.
 
 ---
 
@@ -84,7 +93,7 @@ Instead of a fixed set of dashboards and a settings menu to configure them, Clay
 |---|---|
 | **Frontend** | Next.js 16 (App Router, Turbopack), React 19, TypeScript (strict), Tailwind CSS v4, shadcn/ui + Radix primitives, React Hook Form + Zod, Recharts |
 | **Backend** | tRPC 11, Drizzle ORM, PostgreSQL, Next.js Route Handlers |
-| **Auth** | Clerk (organizations provisioned automatically on first sign-in) |
+| **Auth** | Clerk, incl. Organizations — a private workspace on first sign-in, plus any shared org you're invited to, with the active one resolved per request |
 | **AI** | Anthropic Claude via `@anthropic-ai/sdk`, a bounded tool-use loop (max 6 rounds) over a fixed tool set |
 | **Exports** | `write-excel-file` for XLSX, hand-rolled RFC 4180 CSV, headless Chrome (`puppeteer-core` + `@sparticuz/chromium`) for PDF |
 | **Quality** | Vitest (unit + adversarial security tests), ESLint 9 + typescript-eslint |
@@ -117,15 +126,28 @@ npm run db:push
 npm run dev
 ```
 
-The app runs at http://localhost:3000. Sign up to get an empty personal workspace with a guided start — create your first project, or load a sample workspace (a seeded project plus generated views) with one click. Or visit `/demo` for a read-only, fully loaded showcase with no account: a six-project portfolio, eight example dashboards, scripted agent conversations, and an audit trail. Exports work there for real — open any demo view and download the workbook, a CSV, or the PDF.
+The app runs at http://localhost:3000. Sign up to get an empty personal workspace with a guided start — create your first project, or load a sample workspace (a seeded project plus generated views) with one click. Use the workspace switcher in the header to create a shared organization and invite teammates; everything in Clay is scoped to whichever workspace is active, and owners get the destructive actions (deleting a project, seeding sample data) that members don't. Or visit `/demo` to skip the account entirely: it provisions a real, seeded workspace behind a signed cookie and drops you into the ordinary app. Not a mock — the same pages, the same catalog queries, the same exports and agent. Create tasks, drag dashboards around, import a CSV; it all persists, and the whole workspace is swept 24 hours later.
 
 To use the "ask your interface into existence" chat, paste your own Anthropic API key into the chat panel — it's sent per-request and never stored server-side.
 
 ### Deployment
 
-The live demo runs on [Vercel](https://vercel.com), with Postgres on [Neon](https://neon.tech) and a dedicated Clerk instance for public sign-ups. To deploy your own copy: import the repo into Vercel, add a Postgres database (the Neon integration under the project's Storage tab wires up `DATABASE_URL` automatically), and set `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`. **Schema changes apply themselves on deploy**: `vercel.json` sets the build command to `npm run db:migrate && npm run build`, and the migration files in `drizzle/` are idempotent — safe on a brand-new database, a database that already has the schema, or one that was previously managed with `db:push`.
+The live demo runs on [Vercel](https://vercel.com), with Postgres on [Neon](https://neon.tech) and a dedicated Clerk instance for public sign-ups. To deploy your own copy: import the repo into Vercel, add a Postgres database (the Neon integration under the project's Storage tab wires up `DATABASE_URL` automatically), and set `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`.
+
+**Enable Clerk Organizations, set to "membership optional."** The workspace switcher in the header is Clerk's `<OrganizationSwitcher />`, and Clerk ships the Organizations feature turned *off*. Two things to know:
+
+- **Development and production are separate Clerk instances.** Enabling it locally does nothing for your deployment — you have to turn it on again in the production instance, or the switcher breaks for real users.
+- **Choose "membership optional", not "membership required."** Clay falls back to a private personal workspace when there's no active organization (see `resolveActiveOrg`), which is what a solo user and every brand-new signup lands in. "Membership required" makes Clerk block people behind a create-an-organization screen before they ever reach the app, and that fallback path stops being reachable. **Schema changes apply themselves on deploy**: `vercel.json` sets the build command to `npm run db:migrate && npm run build`, and the migration files in `drizzle/` are idempotent — safe on a brand-new database, a database that already has the schema, or one that was previously managed with `db:push`.
 
 One caveat about `vercel env pull`: environment variables marked *sensitive* on Vercel are pulled as the literal string `"[SENSITIVE]"`. The resulting `.env.production.local` outranks `.env.local` for local production builds and will break them with "Publishable key not valid" — if you pull env vars and local `next build`/`next start` starts failing, delete that file (`npm run test:e2e` guards itself against this by lifting `.env.local` into the environment).
+
+**The demo writes to your production database.** `/demo` provisions a real workspace per visitor — that's what makes it the product rather than a mock — so anonymous visitors create rows. Three things keep that bounded, and none of them need configuring:
+
+- Workspace creation is rate limited per IP, on its own budget separate from the agent's.
+- A returning visitor reuses their existing workspace instead of minting another.
+- Expired workspaces are deleted by the daily `/api/cron/sweep-guests` job, and opportunistically on demo entry so cleanup never depends on cron availability (frequency is plan-limited on Vercel). Correctness doesn't depend on either: a workspace stops resolving the moment it expires, whether or not its rows have been collected yet.
+
+Set `CRON_SECRET` to require a bearer token on the sweep endpoint. Without it the endpoint is public, though all it can do is delete workspaces that have already expired.
 
 Two notes on PDF export specifically:
 
@@ -138,16 +160,19 @@ Two notes on PDF export specifically:
 |---|---|
 | `npm run dev` | Runs the Next.js dev server (Turbopack) |
 | `npm test` | Vitest suite — unit tests plus adversarial agent-security tests |
-| `npm run test:e2e` | Builds, then drives the real `/demo` in headless Chrome (pages, layout editor, exports) |
+| `npm run test:e2e` | Builds, then drives the real app in headless Chrome through `/demo` (pages, layout editor, writes, exports) |
+| `npm run evals` | Live agent evals — real Claude calls, graded. Needs `ANTHROPIC_API_KEY`; not part of `npm test` |
 | `npm run lint` | ESLint across the project |
 | `npm run build` | Production build |
 | `npm run db:push` | Push the Drizzle schema straight to Postgres (dev convenience) |
 | `npm run db:generate` / `db:migrate` | Generate versioned SQL migrations from the schema / apply them |
 | `npm run db:studio` | Open Drizzle Studio to browse the database |
 
-Every pull request runs `lint`, the Vitest suite (against a throwaway Postgres service container), and a production build via [GitHub Actions](.github/workflows/ci.yml) — no repository secrets required.
+Every pull request runs `lint`, the Vitest suite (against a throwaway Postgres service container), a production build, and the headless-Chrome e2e suite via [GitHub Actions](.github/workflows/ci.yml) — no repository secrets required.
 
-`npm run test:e2e` is deliberately **not** in CI and is meant to be run locally. It drives real browser navigations, and on a Clerk *development* instance those trigger a handshake against the instance's own domain, which throwaway keys can't serve. Wiring it into CI would mean putting real Clerk credentials in repository secrets — which pull requests from forks can't read anyway.
+The e2e suite runs in CI too, with no repository secrets — and because `/demo` is now the real app on a throwaway tenant, it exercises the pages customers actually use rather than a lookalike. Two things make that possible without an auth provider: `ClerkProvider` is mounted only where it's needed (the signed-in app and the sign-in/sign-up pages) instead of the root layout, and the middleware skips Clerk entirely for a request carrying a guest cookie. Public pages also no longer pay to download Clerk's JS.
+
+`npm run test:e2e` remains the local entry point — it lifts `.env.local` into the environment to dodge the `vercel env pull` footgun described above. CI runs `next build` plus the e2e config directly, since the workflow's own env is already the source of truth.
 
 ---
 
@@ -160,7 +185,7 @@ Clay/
 ├── src/
 │   ├── app/
 │   │   ├── page.tsx                  # Marketing homepage
-│   │   ├── demo/                     # Public, read-only showcase — sample portfolio, dashboards, scripted agent chats
+│   │   ├── demo/                     # Mints a throwaway workspace, then redirects into the real app (route.ts + exit/)
 │   │   ├── sign-in/ sign-up/         # Clerk auth pages
 │   │   ├── (app)/                    # Authenticated app shell
 │   │   │   ├── dashboard/            # Project list
@@ -172,15 +197,16 @@ Clay/
 │   │   ├── print/                    # Chrome-less print pages the PDF renderer captures (token-gated for live views)
 │   │   └── api/
 │   │       ├── agent/route.ts        # Runs the Claude tool-use loop for a request
-│   │       ├── views/[viewId]/export/    # XLSX / CSV / PDF for a live view
-│   │       ├── demo/views/[viewId]/export/  # The same, over the demo fixtures
+│   │       ├── views/[viewId]/export/    # XLSX / CSV / PDF for a view
+│   │       ├── cron/sweep-guests/    # Deletes expired demo workspaces (daily)
+│   │       ├── mcp/route.ts          # Model Context Protocol server over the query catalog
 │   │       └── trpc/[trpc]/          # tRPC route handler
-│   ├── components/                   # UI primitives (shadcn/Radix), shared chart core, agent + view components
-│   ├── fixtures/                     # Static demo data + sample-workspace view fixtures
+│   ├── components/                   # UI primitives (shadcn/Radix), one renderer + widget set, agent + view components
+│   ├── fixtures/                     # Sample-workspace view fixtures (seeded into new and demo workspaces)
 │   ├── lib/                          # tRPC client, view DSL (Zod), filter/query-key helpers, task display metadata
 │   └── server/
 │       ├── agent/                    # Streaming tool-use loop, tool executor, rate limiter, tools/
-│       ├── auth/                     # ensureUserOrg — provisions an empty org on first sign-in
+│       ├── auth/                     # resolveActiveOrg — Clerk org, personal workspace, or a signed guest session
 │       ├── data-access/              # The query catalog (agent's only read path) + mutation catalog (the only write path)
 │       ├── db/                       # Drizzle schema, client, opt-in sample-workspace seed
 │       ├── export/                   # Dataset planner, CSV/XLSX writers, PDF renderer, print tokens

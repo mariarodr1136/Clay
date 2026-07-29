@@ -10,6 +10,7 @@ import {
   taskPriorities,
   taskStatuses,
 } from "@/server/db/schema";
+import { ForbiddenError, InvalidRequestError, NotFoundError } from "@/server/errors";
 
 // The write-side twin of the query catalog: a fixed, allow-listed set of
 // org-scoped mutations. Same invariants — organizationId and the acting
@@ -46,7 +47,7 @@ async function ownTask(organizationId: string, taskId: string) {
   const task = await db.query.tasks.findFirst({
     where: and(eq(tasks.id, taskId), eq(tasks.organizationId, organizationId)),
   });
-  if (!task) throw new Error("Task not found");
+  if (!task) throw new NotFoundError("Task");
   return task;
 }
 
@@ -69,7 +70,7 @@ async function createTask(
   const project = await db.query.projects.findFirst({
     where: and(eq(projects.id, params.projectId), eq(projects.organizationId, organizationId)),
   });
-  if (!project) throw new Error("Project not found");
+  if (!project) throw new NotFoundError("Project");
 
   const [task] = await db
     .insert(tasks)
@@ -134,7 +135,7 @@ async function assignTask(
         eq(memberships.userId, params.assigneeId)
       ),
     });
-    if (!membership) throw new Error("Assignee is not a member of this workspace");
+    if (!membership) throw new ForbiddenError("Assignee is not a member of this workspace");
   }
 
   const [task] = await db
@@ -212,7 +213,7 @@ export async function runCatalogMutation(
 ) {
   const entry = mutationCatalog[mutationId as MutationCatalogKey];
   if (!entry) {
-    throw new Error(`Unknown mutation catalog id: ${mutationId}`);
+    throw new InvalidRequestError(`Unknown mutation catalog id: ${mutationId}`);
   }
   const params = entry.paramsSchema.parse(rawParams ?? {});
   return entry.run(organizationId, actorId, params as never);

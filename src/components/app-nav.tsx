@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FolderKanban, LayoutDashboard, MessageSquare, ScrollText } from "lucide-react";
+import { FolderKanban, LayoutDashboard, MessageSquare, Plug, ScrollText } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
   { href: "/views", label: "Views", icon: LayoutDashboard },
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/audit", label: "Audit", icon: ScrollText },
+  { href: "/settings", label: "Connect", icon: Plug },
 ];
 
 export function AppNav() {

@@ -1,9 +1,9 @@
-import { and, eq } from "drizzle-orm";
-import { auth } from "@clerk/nextjs/server";
+import { eq } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { db } from "@/server/db/client";
-import { organizations, views, viewVersions } from "@/server/db/schema";
-import { ensureUserOrg } from "@/server/auth/ensure-user-org";
+import { organizations, viewVersions } from "@/server/db/schema";
+import { activeView } from "@/server/db/view-access";
+import { resolveActiveOrg } from "@/server/auth/resolve-org";
 import { parseView } from "@/lib/dsl/validate";
 import { collectViewDatasets, collectWidgetDataset } from "@/server/export/datasets";
 import { buildViewWorkbook } from "@/server/export/xlsx";
@@ -21,10 +21,16 @@ import { signPrintToken } from "@/server/export/print-token";
 // the export ceiling instead of the widget's 50-row default.
 
 export async function GET(request: NextRequest, ctx: { params: Promise<{ viewId: string }> }) {
-  const { userId } = await auth();
-  if (!userId) return new Response("Unauthorized", { status: 401 });
+  // resolveActiveOrg accepts a Clerk session or a signed guest cookie and
+  // throws when there's neither, so exports work identically in a demo
+  // workspace — same catalog, same writers, same files.
+  let organizationId: string;
+  try {
+    ({ organizationId } = await resolveActiveOrg());
+  } catch {
+    return new Response("Unauthorized", { status: 401 });
+  }
 
-  const { organizationId } = await ensureUserOrg();
   const { viewId } = await ctx.params;
 
   const parsedQuery = parseExportQuery(request);
@@ -34,7 +40,7 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ viewId:
   const { format, widgetId, filters } = parsedQuery.data;
 
   const view = await db.query.views.findFirst({
-    where: and(eq(views.id, viewId), eq(views.organizationId, organizationId)),
+    where: activeView(viewId, organizationId),
   });
   if (!view?.currentVersionId) return new Response("View not found", { status: 404 });
 

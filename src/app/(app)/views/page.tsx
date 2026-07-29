@@ -21,6 +21,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ViewCardMenu } from "@/components/views/view-card-menu";
 
 const widgetMeta: Record<string, { icon: typeof BarChart3; label: string }> = {
   chart: { icon: BarChart3, label: "chart" },
@@ -120,6 +121,77 @@ function TemplatesSection() {
   );
 }
 
+function TrashSection() {
+  const utils = trpc.useUtils();
+  const trashQuery = trpc.views.listTrash.useQuery();
+
+  const refresh = () => {
+    utils.views.list.invalidate();
+    utils.views.listTrash.invalidate();
+  };
+
+  const restore = trpc.views.restore.useMutation({
+    onSuccess: (view) => {
+      toast.success(`Restored "${view.name}"`);
+      refresh();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const purge = trpc.views.purge.useMutation({
+    onSuccess: () => {
+      toast.success("Deleted permanently");
+      refresh();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const trashed = trashQuery.data ?? [];
+  if (trashed.length === 0) return null;
+
+  return (
+    <section className="space-y-3">
+      <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+        Trash
+      </h2>
+      <div className="border-border divide-border divide-y rounded-2xl border">
+        {trashed.map((view) => (
+          <div key={view.id} className="flex items-center justify-between gap-4 px-4 py-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">{view.name}</p>
+              <p className="text-muted-foreground text-xs">
+                Deleted{" "}
+                {view.deletedAt
+                  ? formatDistanceToNow(new Date(view.deletedAt), { addSuffix: true })
+                  : "recently"}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={restore.isPending}
+                onClick={() => restore.mutate({ viewId: view.id })}
+              >
+                Restore
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                disabled={purge.isPending}
+                onClick={() => purge.mutate({ viewId: view.id })}
+              >
+                Delete forever
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function ViewsPage() {
   const viewsQuery = trpc.views.list.useQuery();
   const views = viewsQuery.data ?? [];
@@ -132,9 +204,12 @@ export default function ViewsPage() {
         <CardContent className="flex h-full flex-col gap-3">
           <div className="flex items-start justify-between gap-3">
             <h2 className="font-semibold tracking-tight">{view.name}</h2>
-            <Badge variant={view.scope === "org" ? "default" : "outline"} className="shrink-0">
-              {view.scope === "org" ? "org" : "personal"}
-            </Badge>
+            <div className="flex shrink-0 items-center gap-1">
+              <Badge variant={view.scope === "org" ? "default" : "outline"}>
+                {view.scope === "org" ? "org" : "personal"}
+              </Badge>
+              <ViewCardMenu viewId={view.id} name={view.name} />
+            </div>
           </div>
           {view.promptText && (
             <p className="text-muted-foreground flex items-start gap-1.5 text-sm leading-relaxed">
@@ -209,6 +284,7 @@ export default function ViewsPage() {
       )}
 
       <TemplatesSection />
+      <TrashSection />
     </div>
   );
 }

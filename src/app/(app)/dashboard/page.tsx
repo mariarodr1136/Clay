@@ -11,10 +11,21 @@ import {
   Database,
   FolderKanban,
   MessageSquareText,
+  Pin,
   Plus,
   Sparkles,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
+import {
+  FolderMenu,
+  ProjectCardMenu,
+  NewFolderButton,
+  type Folder,
+} from "@/components/projects/folder-controls";
+import { ProjectEditDialog } from "@/components/projects/project-edit-dialog";
+import { ArchivedProjects } from "@/components/projects/archived-projects";
+import { type ProjectHealth } from "@/lib/project-health";
+import { HealthBadge } from "@/components/projects/health-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -34,6 +45,13 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 const createProjectSchema = z.object({
@@ -167,11 +185,20 @@ function OnboardingHero({
 export default function DashboardPage() {
   const utils = trpc.useUtils();
   const projectsQuery = trpc.projects.listWithStats.useQuery();
+  const foldersQuery = trpc.folders.list.useQuery();
   const [open, setOpen] = useState(false);
+  const [sort, setSort] = useState<"recent" | "name" | "progress" | "overdue">("recent");
+  const [editing, setEditing] = useState<{
+    id: string;
+    name: string;
+    description: string | null;
+    targetDate: string | null;
+  } | null>(null);
 
   const invalidate = () => {
     utils.projects.listWithStats.invalidate();
     utils.projects.list.invalidate();
+    utils.folders.list.invalidate();
   };
 
   const createProject = trpc.projects.create.useMutation({
@@ -198,7 +225,42 @@ export default function DashboardPage() {
     defaultValues: { name: "", description: "" },
   });
 
-  const projects = projectsQuery.data ?? [];
+  const allProjects = projectsQuery.data ?? [];
+  const folders: Folder[] = foldersQuery.data ?? [];
+
+  // Sorting applies inside every group rather than flattening them — the
+  // folders are the arrangement, this is the order within it.
+  const compare = {
+    recent: (a: (typeof allProjects)[number], b: (typeof allProjects)[number]) =>
+      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    name: (a: (typeof allProjects)[number], b: (typeof allProjects)[number]) =>
+      a.name.localeCompare(b.name),
+    progress: (a: (typeof allProjects)[number], b: (typeof allProjects)[number]) =>
+      (b.total === 0 ? 0 : b.done / b.total) - (a.total === 0 ? 0 : a.done / a.total),
+    overdue: (a: (typeof allProjects)[number], b: (typeof allProjects)[number]) =>
+      b.overdue - a.overdue,
+  }[sort];
+
+  const projects = [...allProjects].sort(compare);
+  const pinned = projects.filter((project) => project.pinnedAt);
+
+  // Folders in their configured order, then whatever isn't in one. Empty
+  // folders still appear — a folder you just made shouldn't look like it
+  // failed to save.
+  const groups = [
+    ...folders.map((folder) => ({
+      key: folder.id,
+      folder,
+      projects: projects.filter((project) => project.folderId === folder.id),
+    })),
+    {
+      key: "__ungrouped__",
+      folder: null,
+      projects: projects.filter(
+        (project) => !folders.some((folder) => folder.id === project.folderId)
+      ),
+    },
+  ].filter((group) => group.folder !== null || group.projects.length > 0);
   const totals = projects.reduce(
     (acc, p) => ({
       total: acc.total + p.total,
@@ -209,6 +271,82 @@ export default function DashboardPage() {
     { total: 0, done: 0, inFlight: 0, overdue: 0 }
   );
 
+  // One card renderer, used by both the pinned group and the folders — the
+  // markup is identical and only the list differs.
+  const renderProjectCard = (project: (typeof projects)[number]) => {
+
+              const percentDone =
+                project.total === 0 ? 0 : Math.round((project.done / project.total) * 100);
+              const color = avatarColor(project.name);
+              return (
+                <Link key={project.id} href={`/projects/${project.id}`} className="group">
+                  <Card className="h-full gap-4 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-[0_2px_4px_rgba(0,0,0,0.04),0_16px_40px_-14px_rgba(0,0,0,0.14)]">
+                    <CardContent className="flex h-full flex-col gap-3.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <span
+                          className="flex size-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold text-white"
+                          style={{ backgroundColor: color }}
+                        >
+                          {project.name.slice(0, 1).toUpperCase()}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {project.overdue > 0 && (
+                            <span className="text-destructive text-[11px] font-medium">
+                              {project.overdue} overdue
+                            </span>
+                          )}
+                          <ProjectCardMenu
+                            project={project}
+                            folders={folders}
+                            onEdit={() => setEditing(project)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <HealthBadge
+                          health={project.health as ProjectHealth}
+                          reason={project.reason}
+                        />
+                        <h2 className="flex items-center gap-1 font-semibold tracking-tight">
+                          {project.pinnedAt && (
+                            <Pin className="text-muted-foreground size-3.5 shrink-0" />
+                          )}
+                          {project.name}
+                          <ArrowUpRight className="text-muted-foreground size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+                        </h2>
+                        {project.description && (
+                          <p className="text-muted-foreground line-clamp-2 text-sm leading-relaxed">
+                            {project.description}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="mt-auto">
+                        <div className="text-muted-foreground mb-1 flex justify-between text-[11px] font-medium">
+                          <span>
+                            {project.done}/{project.total} done
+                          </span>
+                          <span className="tabular-nums">{percentDone}%</span>
+                        </div>
+                        <div
+                          className="h-1.5 overflow-hidden rounded-full"
+                          style={{
+                            backgroundColor: `color-mix(in oklch, ${color}, transparent 88%)`,
+                          }}
+                        >
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${percentDone}%`, backgroundColor: color }}
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+  };
+
   return (
     <div className="mx-auto max-w-6xl space-y-8">
       <div className="flex items-center justify-between gap-4">
@@ -218,6 +356,21 @@ export default function DashboardPage() {
             Everything you&apos;re tracking, in one place.
           </p>
         </div>
+        <div className="flex items-center gap-2">
+        {projects.length > 0 && (
+          <Select value={sort} onValueChange={(value) => setSort(value as typeof sort)}>
+            <SelectTrigger size="sm" className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="recent">Recently active</SelectItem>
+              <SelectItem value="name">Name</SelectItem>
+              <SelectItem value="progress">Progress</SelectItem>
+              <SelectItem value="overdue">Most overdue</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+        {projects.length > 0 && <NewFolderButton folderCount={folders.length} />}
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -269,6 +422,7 @@ export default function DashboardPage() {
             </Form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {projectsQuery.isLoading && <p className="text-muted-foreground text-sm">Loading…</p>}
@@ -299,68 +453,64 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {projects.map((project) => {
-              const percentDone =
-                project.total === 0 ? 0 : Math.round((project.done / project.total) * 100);
-              const color = avatarColor(project.name);
-              return (
-                <Link key={project.id} href={`/projects/${project.id}`} className="group">
-                  <Card className="h-full gap-4 transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-[0_2px_4px_rgba(0,0,0,0.04),0_16px_40px_-14px_rgba(0,0,0,0.14)]">
-                    <CardContent className="flex h-full flex-col gap-3.5">
-                      <div className="flex items-start justify-between gap-3">
-                        <span
-                          className="flex size-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold text-white"
-                          style={{ backgroundColor: color }}
-                        >
-                          {project.name.slice(0, 1).toUpperCase()}
-                        </span>
-                        {project.overdue > 0 && (
-                          <span className="text-destructive text-[11px] font-medium">
-                            {project.overdue} overdue
-                          </span>
-                        )}
-                      </div>
+          {pinned.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-muted-foreground flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
+                <Pin className="size-3.5" />
+                Pinned
+              </h2>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {pinned.map(renderProjectCard)}
+              </div>
+            </section>
+          )}
 
-                      <div className="space-y-1">
-                        <h2 className="flex items-center gap-1 font-semibold tracking-tight">
-                          {project.name}
-                          <ArrowUpRight className="text-muted-foreground size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
-                        </h2>
-                        {project.description && (
-                          <p className="text-muted-foreground line-clamp-2 text-sm leading-relaxed">
-                            {project.description}
-                          </p>
-                        )}
-                      </div>
+          {groups.map((group) => (
+            <section key={group.key} className="space-y-3">
+              {group.folder ? (
+                <div className="flex items-center gap-2">
+                  <span
+                    className="size-2.5 rounded-full"
+                    style={{
+                      backgroundColor: `var(${group.folder.colorVar ?? "--chart-1"})`,
+                    }}
+                  />
+                  <h2 className="text-sm font-semibold tracking-tight">{group.folder.name}</h2>
+                  <span className="text-muted-foreground text-xs">
+                    {group.projects.length}
+                  </span>
+                  <FolderMenu
+                    folder={group.folder}
+                    index={folders.findIndex((f) => f.id === group.folder!.id)}
+                    order={folders.map((f) => f.id)}
+                  />
+                </div>
+              ) : (
+                // Only worth a heading once there's something to contrast
+                // it with — an unfoldered workspace shouldn't grow a
+                // "No folder" label out of nowhere.
+                folders.length > 0 && (
+                  <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                    No folder
+                  </h2>
+                )
+              )}
 
-                      <div className="mt-auto">
-                        <div className="text-muted-foreground mb-1 flex justify-between text-[11px] font-medium">
-                          <span>
-                            {project.done}/{project.total} done
-                          </span>
-                          <span className="tabular-nums">{percentDone}%</span>
-                        </div>
-                        <div
-                          className="h-1.5 overflow-hidden rounded-full"
-                          style={{
-                            backgroundColor: `color-mix(in oklch, ${color}, transparent 88%)`,
-                          }}
-                        >
-                          <div
-                            className="h-full rounded-full"
-                            style={{ width: `${percentDone}%`, backgroundColor: color }}
-                          />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              );
-            })}
-          </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {group.projects.map(renderProjectCard)}
+              </div>
+            </section>
+          ))}
+
+          <ArchivedProjects />
         </>
       )}
+
+      <ProjectEditDialog
+        project={editing}
+        open={editing !== null}
+        onOpenChange={(next) => !next && setEditing(null)}
+      />
     </div>
   );
 }

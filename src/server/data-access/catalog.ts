@@ -15,7 +15,13 @@ import { createdVsCompleted, createdVsCompletedParams } from "./queries/created-
 import { cycleTimeByWeek, cycleTimeByWeekParams } from "./queries/cycle-time-by-week";
 import { agingWip, agingWipParams } from "./queries/aging-wip";
 import { pointsByProject, pointsByProjectParams } from "./queries/points-by-project";
+import { recentActivity, recentActivityParams } from "./queries/recent-activity";
+import { activityByUser, activityByUserParams } from "./queries/activity-by-user";
+import { statusByFolder, statusByFolderParams } from "./queries/status-by-folder";
+import { openPointsByFolder, openPointsByFolderParams } from "./queries/open-points-by-folder";
+import { tasksByTag, tasksByTagParams } from "./queries/tasks-by-tag";
 import { EXPORT_ROW_LIMIT, INTERACTIVE_ROW_LIMIT } from "./limits";
+import { InvalidRequestError } from "@/server/errors";
 
 type CatalogEntry = {
   description: string;
@@ -26,6 +32,10 @@ type CatalogEntry = {
   // Exports run at this ceiling instead of the widget's default; aggregate
   // queries leave it unset because they're already one row per group.
   exportRowLimit?: number;
+  // Set on queries whose rows are an ordered series over time. Only these
+  // can back a KPI trend: a sparkline or a period-over-period delta drawn
+  // from unordered rows would be a claim the data doesn't support.
+  timeSeries?: boolean;
 };
 
 // The single allow-listed, org-scoped surface for reading task data. Every
@@ -59,6 +69,7 @@ export const queryCatalog = {
     description: "Count of tasks completed per day over a recent window.",
     paramsSchema: completionsOverTimeParams,
     run: completionsOverTime,
+    timeSeries: true,
   },
   tasksByAssignee: {
     description: "Count of tasks grouped by assignee.",
@@ -94,18 +105,21 @@ export const queryCatalog = {
       "Story points and task count completed per week ({ week, points, tasks }) over the last N weeks (default 8) — the velocity trend; ideal for a line or bar chart with xField 'week'.",
     paramsSchema: velocityByWeekParams,
     run: velocityByWeek,
+    timeSeries: true,
   },
   createdVsCompleted: {
     description:
       "Tasks created vs completed per day ({ day, created, completed }) over the last N days (default 30) — inflow vs outflow; ideal for a two-series line/area chart with xField 'day'.",
     paramsSchema: createdVsCompletedParams,
     run: createdVsCompleted,
+    timeSeries: true,
   },
   cycleTimeByWeek: {
     description:
       "Average days from task creation to completion, per week completed ({ week, avgDays, tasks }) over the last N weeks (default 8) — the cycle-time trend; ideal for a line chart with xField 'week', yField 'avgDays'.",
     paramsSchema: cycleTimeByWeekParams,
     run: cycleTimeByWeek,
+    timeSeries: true,
   },
   agingWip: {
     description:
@@ -118,6 +132,37 @@ export const queryCatalog = {
       "Open story points per project ({ project, points }) — where remaining effort is concentrated; ideal for a donut chart.",
     paramsSchema: pointsByProjectParams,
     run: pointsByProject,
+  },
+  recentActivity: {
+    description:
+      "Recent task activity ({ verb, actor, task, taskId, at }) over the last N days (default 14), newest first — who did what; ideal for an activity-feed table.",
+    paramsSchema: recentActivityParams,
+    run: recentActivity,
+    exportRowLimit: EXPORT_ROW_LIMIT,
+  },
+  activityByUser: {
+    description:
+      "Per-person activity counts over the last N days (default 30) ({ actor, created, statusChanges, assignments, total }) — who is moving work; ideal for a stackedBar chart with xField 'actor'.",
+    paramsSchema: activityByUserParams,
+    run: activityByUser,
+  },
+  statusByFolder: {
+    description:
+      "Task status counts grouped by project folder ({ folder, todo, in_progress, in_review, done, total }) — how each area of the workspace is doing; ideal for a stackedBar chart with xField 'folder'. Projects in no folder appear as 'Unfiled'.",
+    paramsSchema: statusByFolderParams,
+    run: statusByFolder,
+  },
+  openPointsByFolder: {
+    description:
+      "Open story points and task count per project folder ({ folder, points, tasks }) — where remaining effort sits across areas; ideal for a donut or bar chart.",
+    paramsSchema: openPointsByFolderParams,
+    run: openPointsByFolder,
+  },
+  tasksByTag: {
+    description:
+      "Task and point counts per tag ({ tag, count, points }), open work only unless includeDone is true — what kind of work is outstanding; ideal for a bar chart with xField 'tag'.",
+    paramsSchema: tasksByTagParams,
+    run: tasksByTag,
   },
 } satisfies Record<string, CatalogEntry>;
 
@@ -142,16 +187,68 @@ export function clampInteractiveParams(rawParams: unknown): unknown {
   return { ...params, limit: INTERACTIVE_ROW_LIMIT };
 }
 
+// A per-request memo, created fresh in the tRPC context and shared by every
+// procedure in one batched HTTP request.
+//
+// The problem it solves: a dashboard routinely binds several widgets to the
+// same query — three KPI tiles over tasksList, a chart and a table over
+// overdueTasks — and the client batches those into a single request, where
+// they otherwise become that many identical round trips to Postgres.
+//
+// React's cache() is the obvious tool and does not work here: measured
+// against the built app, three identical queries in one tRPC batch produced
+// three database hits, because a Route Handler isn't a render scope. Passing
+// an explicit Map is uglier and verifiably correct.
+//
+// Deliberately request-scoped rather than a cross-request cache. These are
+// live dashboards over data the same user is editing, so serving a stale
+// count is a worse failure than running the query again — and a cross-request
+// `use cache` would mean enabling Cache Components app-wide, changing
+// rendering semantics far beyond this file.
+export type QueryMemo = Map<string, Promise<unknown>>;
+
+export function createQueryMemo(): QueryMemo {
+  return new Map();
+}
+
+// Sorted keys so two equivalent param objects produce one entry.
+function stableParamsJson(params: unknown): string {
+  if (!params || typeof params !== "object" || Array.isArray(params)) return JSON.stringify(params);
+  const record = params as Record<string, unknown>;
+  return JSON.stringify(Object.fromEntries(Object.keys(record).sort().map((k) => [k, record[k]])));
+}
+
 // Indexed directly (rather than through a helper returning CatalogEntry) so
 // the return type stays the precise union of the catalog's own row types —
 // that inference is what gives tRPC clients typed widget data.
-export async function runCatalogQuery(organizationId: string, queryId: string, rawParams: unknown) {
+export async function runCatalogQuery(
+  organizationId: string,
+  queryId: string,
+  rawParams: unknown,
+  memo?: QueryMemo
+) {
   const entry = queryCatalog[queryId as QueryCatalogKey];
   if (!entry) {
-    throw new Error(`Unknown query catalog id: ${queryId}`);
+    throw new InvalidRequestError(`Unknown query catalog id: ${queryId}`);
   }
+  // Parsed before the key is built so defaults and clamping land *inside*
+  // it — otherwise {} and { limit: 50 } would miss each other despite being
+  // the same query.
   const params = entry.paramsSchema.parse(clampInteractiveParams(rawParams ?? {}));
-  return entry.run(organizationId, params as never);
+  if (!memo) return entry.run(organizationId, params as never);
+
+  // organizationId is part of the key, so a memo can never hand one org's
+  // rows to another even if one were somehow shared across requests.
+  const key = `${organizationId}|${queryId}|${stableParamsJson(params)}`;
+  const existing = memo.get(key);
+  if (existing) return existing;
+
+  // The promise is stored, not the resolved value, so widgets that ask
+  // concurrently share one in-flight query rather than racing to start
+  // several before the first returns.
+  const pending = entry.run(organizationId, params as never);
+  memo.set(key, pending);
+  return pending;
 }
 
 export type CatalogExportResult = {
@@ -172,7 +269,7 @@ export async function runCatalogQueryForExport(
 ): Promise<CatalogExportResult> {
   const entry: CatalogEntry | undefined = queryCatalog[queryId as QueryCatalogKey];
   if (!entry) {
-    throw new Error(`Unknown query catalog id: ${queryId}`);
+    throw new InvalidRequestError(`Unknown query catalog id: ${queryId}`);
   }
   const rowLimit = entry.exportRowLimit ?? null;
 
@@ -187,4 +284,12 @@ export async function runCatalogQueryForExport(
   const rows = Array.isArray(result) ? result : [];
 
   return { rows, truncated: rowLimit !== null && rows.length >= rowLimit, rowLimit };
+}
+
+// Which catalog ids return an ordered series over time. Used by the view
+// quality checks to reject a KPI trend drawn over unordered rows.
+export function timeSeriesQueryIds(): string[] {
+  return Object.entries(queryCatalog)
+    .filter(([, entry]) => (entry as CatalogEntry).timeSeries)
+    .map(([id]) => id);
 }

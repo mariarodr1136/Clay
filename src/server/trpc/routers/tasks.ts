@@ -5,6 +5,7 @@ import { db } from "@/server/db/client";
 import { tasks, taskStatuses, taskPriorities } from "@/server/db/schema";
 import { runCatalogQuery } from "@/server/data-access/catalog";
 import { runCatalogMutation } from "@/server/data-access/mutations";
+import { NotFoundError } from "@/server/errors";
 
 export const tasksRouter = router({
   listByProject: protectedProcedure
@@ -25,8 +26,8 @@ export const tasksRouter = router({
     .input(z.object({ projectId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const [statusCounts, overdue] = await Promise.all([
-        runCatalogQuery(ctx.organizationId, "tasksByStatusCount", { projectId: input.projectId }),
-        runCatalogQuery(ctx.organizationId, "overdueTasks", { projectId: input.projectId, limit: 5 }),
+        runCatalogQuery(ctx.organizationId, "tasksByStatusCount", { projectId: input.projectId }, ctx.queryMemo),
+        runCatalogQuery(ctx.organizationId, "overdueTasks", { projectId: input.projectId, limit: 5 }, ctx.queryMemo),
       ]);
       return {
         statusCounts: statusCounts as { status: string; count: number }[],
@@ -51,6 +52,36 @@ export const tasksRouter = router({
     // side.
     .mutation(async ({ ctx, input }) => {
       return runCatalogMutation(ctx.organizationId, ctx.userId, "createTask", input);
+    }),
+
+  // Through the mutation catalog like the rest: it re-checks that the
+  // assignee is a member of this workspace, which only became a meaningful
+  // check once workspaces could hold more than one person.
+  assign: protectedProcedure
+    .input(z.object({ id: z.string().uuid(), assigneeId: z.string().nullable() }))
+    .mutation(async ({ ctx, input }) => {
+      return runCatalogMutation(ctx.organizationId, ctx.userId, "assignTask", {
+        taskId: input.id,
+        assigneeId: input.assigneeId,
+      });
+    }),
+
+  setTags: protectedProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        // Capped so a runaway client can't turn one row into a document.
+        tags: z.array(z.string().min(1).max(24)).max(12),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const [task] = await db
+        .update(tasks)
+        .set({ tags: input.tags, updatedAt: new Date() })
+        .where(and(eq(tasks.id, input.id), eq(tasks.organizationId, ctx.organizationId)))
+        .returning();
+      if (!task) throw new NotFoundError("Task");
+      return task;
     }),
 
   updateStatus: protectedProcedure
@@ -80,7 +111,7 @@ export const tasksRouter = router({
         .set({ ...rest, updatedAt: new Date() })
         .where(and(eq(tasks.id, id), eq(tasks.organizationId, ctx.organizationId)))
         .returning();
-      if (!task) throw new Error("Task not found");
+      if (!task) throw new NotFoundError("Task");
       return task;
     }),
 

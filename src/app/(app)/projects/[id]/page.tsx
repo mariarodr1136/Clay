@@ -7,11 +7,15 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
-import { CheckSquare, Plus, Trash2 } from "lucide-react";
+import { CheckSquare, Plus, Trash2, Upload } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { taskPriorities, taskStatuses } from "@/server/db/schema";
 import { statusMeta } from "@/lib/task-display";
 import { StatusBadge, PriorityBadge } from "@/components/task-badges";
+import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
+import { ProjectHeader } from "@/components/tasks/project-header";
+import { HealthBadge } from "@/components/projects/health-badge";
+import { ImportDialog } from "@/components/tasks/import-dialog";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +81,8 @@ export default function ProjectPage() {
   const utils = trpc.useUtils();
   const [open, setOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<(typeof taskStatuses)[number] | null>(null);
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const project = trpc.projects.get.useQuery({ id: projectId });
   const tasksQuery = trpc.tasks.listByProject.useQuery({ projectId });
@@ -115,12 +121,31 @@ export default function ProjectPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-semibold tracking-tight">{project.data?.name ?? "…"}</h1>
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-3xl font-semibold tracking-tight">{project.data?.name ?? "…"}</h1>
+            {project.data && (
+              <HealthBadge health={project.data.health} reason={project.data.reason} />
+            )}
+          </div>
           {project.data?.description && (
             <p className="text-muted-foreground max-w-xl text-sm">{project.data.description}</p>
           )}
+          {project.data && (
+            <ProjectHeader
+              lead={project.data.lead}
+              members={project.data.members}
+              targetDate={project.data.targetDate}
+              openPoints={project.data.stats.openPoints}
+              overdue={project.data.stats.overdue}
+            />
+          )}
         </div>
+        <div className="flex items-center gap-2">
+        <Button variant="outline" onClick={() => setImportOpen(true)}>
+          <Upload data-icon="inline-start" />
+          Import
+        </Button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -243,7 +268,10 @@ export default function ProjectPage() {
             </Form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
+
+      <ImportDialog projectId={projectId} open={importOpen} onOpenChange={setImportOpen} />
 
       {statsQuery.data && (tasksQuery.data?.length ?? 0) > 0 && (
         <div className="flex flex-wrap items-center gap-2">
@@ -306,7 +334,27 @@ export default function ProjectPage() {
                 : tasksQuery.data
               ).map((task) => (
                 <TableRow key={task.id} className="group/row">
-                  <TableCell className="font-medium">{task.title}</TableCell>
+                  <TableCell className="font-medium">
+                    <button
+                      type="button"
+                      className="hover:underline"
+                      onClick={() => setDetailTaskId(task.id)}
+                    >
+                      {task.title}
+                    </button>
+                    {task.tags.length > 0 && (
+                      <span className="ml-2 inline-flex flex-wrap gap-1 align-middle">
+                        {task.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Select
                       value={task.status}
@@ -371,6 +419,11 @@ export default function ProjectPage() {
           </Button>
         </div>
       )}
+
+      <TaskDetailDialog
+        taskId={detailTaskId}
+        onOpenChange={(open) => !open && setDetailTaskId(null)}
+      />
     </div>
   );
 }

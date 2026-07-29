@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { optionalClerkUserId } from "@/server/auth/clerk-optional";
 import { redirect } from "next/navigation";
 import { Fraunces } from "next/font/google";
 import Image from "next/image";
@@ -8,13 +8,13 @@ import {
   Check,
   Circle,
   Code,
-  Database,
   CirclePlay,
   DollarSign,
   GitBranch,
   History,
   Lightbulb,
   MessageSquareText,
+  Plug,
   Rocket,
   ShieldCheck,
   Sparkles,
@@ -43,7 +43,10 @@ function GitHubMark({ className }: { className?: string }) {
 }
 
 export default async function Home() {
-  const { userId } = await auth();
+  // Not auth() directly: a demo visitor reaches this page with Clerk's
+  // middleware deliberately skipped, and auth() throws in that state rather
+  // than reporting a signed-out user.
+  const userId = await optionalClerkUserId();
   if (userId) {
     redirect("/dashboard");
   }
@@ -131,14 +134,14 @@ export default async function Home() {
             <span className="text-primary">Watch it appear.</span>
           </h1>
           <p className="max-w-xl text-lg text-balance text-muted-foreground sm:text-xl">
-            Clay is a project tracker where the UI isn&apos;t fixed. Describe the
-            dashboard you need, and a coding agent builds it — live, against your
-            real data.
+            A project tracker where the UI isn&apos;t fixed. Describe the dashboard
+            you need — Clay builds it against your real data, in seconds.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-sm text-muted-foreground">
             <span>Real data</span>
             <span>No configuration</span>
             <span>Full history</span>
+            <span>Works with your team</span>
           </div>
           <div className="mt-2 flex flex-col gap-3 sm:flex-row">
             {/* Plain <a>, not next/link: these are the first-ever navigation
@@ -158,7 +161,7 @@ export default async function Home() {
             <Button asChild size="lg" variant="outline">
               <a href="/demo" className="group">
                 <CirclePlay data-icon="inline-start" />
-                Try Live Demo
+                Try It — No Account
               </a>
             </Button>
           </div>
@@ -193,10 +196,11 @@ export default async function Home() {
                 Type a sentence, get a dashboard.
               </h3>
               <p className="leading-relaxed text-muted-foreground">
-                The card on the right is a view the agent generated from the single
-                request at its top. It wrote the chart, queried the Website Relaunch
-                project&apos;s 38 real tasks, and rendered the result — no chart
-                picker, no field mapping, no configuration screen.
+                The card on the right is a view the agent produced from the single
+                request at its top. It picked the chart, bound it to an approved
+                query over the Website Relaunch project&apos;s real tasks, and
+                rendered the result — no chart picker, no field mapping, no
+                configuration screen.
               </p>
               <p className="text-sm text-muted-foreground">
                 The <span className="font-medium text-foreground">live view</span>{" "}
@@ -216,8 +220,8 @@ export default async function Home() {
               &ldquo;Show tasks by status as a bar chart.&rdquo;
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              One sentence in chat. The agent wrote this view and wired it to the
-              Website Relaunch project.
+              One sentence in chat. The agent assembled this view and wired it to
+              the Website Relaunch project.
             </p>
             <div className="mt-4 space-y-3 rounded-lg bg-muted/50 p-4">
               <div className="flex h-24 items-end gap-2.5">
@@ -262,7 +266,7 @@ export default async function Home() {
               </span>
               <span>
                 <span className="font-medium text-foreground">Agent</span> · Built from
-                38 live tasks. Ask again to change anything.
+                live tasks. Ask again to change anything.
               </span>
             </div>
           </div>
@@ -330,8 +334,9 @@ export default async function Home() {
             Not another dashboard.
           </h2>
           <p className="text-lg text-muted-foreground sm:text-xl">
-            Just a small tracker for projects and tasks — with an agent that writes
-            whatever interface you ask it for.
+            Just a tracker for projects and tasks — with an agent that assembles
+            whatever interface you ask it for, out of parts that were checked
+            before it got to use them.
           </p>
         </div>
         <div className="mt-16 grid border-t border-border sm:grid-cols-3">
@@ -343,8 +348,8 @@ export default async function Home() {
             },
             {
               n: "02",
-              title: "Real data.",
-              body: "Every generated view queries the same live database that holds your actual projects and tasks.",
+              title: "Real data. Real team.",
+              body: "Every view queries the same live database that holds your projects and tasks — shared with whoever you invite.",
             },
             {
               n: "03",
@@ -396,34 +401,34 @@ export default async function Home() {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {[
               {
-                icon: Database,
-                title: "Your Data, One Database",
-                body: "Projects and tasks live in Postgres you control. Generated views read from it directly.",
-              },
-              {
                 icon: Sparkles,
                 title: "Ask, Don't Configure",
-                body: "Describe a dashboard in plain language and a coding agent writes and renders it in seconds.",
+                body: "Describe a dashboard in plain language and it exists seconds later — no chart picker, no field mapping, no settings maze.",
               },
               {
                 icon: MessageSquareText,
                 title: "Refine in Conversation",
-                body: "“Make it bigger.” “Group by assignee.” Keep pushing a view forward with follow-ups.",
+                body: "“Make it bigger.” “Group by assignee.” The agent remembers the thread, so follow-ups build on each other.",
               },
               {
                 icon: History,
                 title: "Versioned by Default",
-                body: "Every change is a new version, never an overwrite. Roll back to any point in a view's history.",
+                body: "Every change is a new version, never an overwrite. Roll back to any point, with a real diff of what moved.",
               },
               {
                 icon: ShieldCheck,
-                title: "Guardrailed Agent",
-                body: "The agent runs read-only queries through vetted tools, with rate limits on every loop.",
+                title: "Guardrailed by Construction",
+                body: "The agent never writes code or SQL. It picks validated widgets and binds them to approved queries — so a generated view is safe the moment it appears.",
               },
               {
-                icon: BookOpen,
-                title: "Audited End to End",
-                body: "Every agent action lands in an audit log you can read, so nothing happens off the record.",
+                icon: Users,
+                title: "Built for a Team",
+                body: "Invite people into a shared workspace, assign work, comment on tasks. Every view, chart and audit entry is scoped to it.",
+              },
+              {
+                icon: Plug,
+                title: "Connect Your Assistant",
+                body: "Clay speaks MCP. Point Claude Desktop at it and ask about your projects from anywhere — read-only, one workspace, revocable.",
               },
             ].map((card) => (
               <div
@@ -665,23 +670,27 @@ export default async function Home() {
             {[
               {
                 q: "What does the agent actually build?",
-                a: "Real interfaces — charts, tables, boards, and tiles — generated as code and rendered inside Clay against your live project data, not static mockups.",
+                a: "Real interfaces — charts, tables, boards and tiles — rendered inside Clay against your live project data. It does not write code. It picks from a validated vocabulary of widgets and binds each one to an approved query, which is why a generated view can be trusted the moment it appears rather than reviewed first.",
               },
               {
                 q: "Can the agent change or delete my data?",
-                a: "No. It works through a small set of vetted, read-only tools: it can describe your schema, run queries, and propose views. Writing data isn't one of its abilities, and every action it takes is recorded in the audit log.",
+                a: "No. It works through a small set of vetted, read-only tools: describe the data model, run an approved query, propose a view. Writing isn't one of its abilities. A view can still contain controls that change things — a status dropdown on a table row — but those only ever run when you click them, under your own account, never the agent's.",
               },
               {
-                q: "What happens when I ask for a change?",
-                a: "Each request produces a new version of the view instead of overwriting the last one. You can step back through the full history at any time and continue from any point.",
+                q: "Can I try it without signing up?",
+                a: "Yes, and it isn't a read-only tour. The demo hands you a real workspace pre-filled with six projects and a team — you can create tasks, drag dashboards around, import a spreadsheet and export a workbook. It's the same application a paying customer uses; it just gets deleted after 24 hours.",
               },
               {
-                q: "Is the data in generated views real?",
-                a: "Yes. Views query the same Postgres database that holds your projects and tasks, so the moment your data changes, the views reflect it.",
+                q: "Can I get my existing work in?",
+                a: "Import a CSV or an Excel file. Columns are matched automatically where the header is recognisable, statuses and priorities are translated from however your spreadsheet words them, and a dry run tells you exactly what will be created — and which rows need attention — before anything is written.",
+              },
+              {
+                q: "Does it work with my team?",
+                a: "Invite people into a shared workspace and everything is scoped to it: assignees, comments, workload charts, the audit log. Owners keep the actions that reshape a workspace, like deleting a project.",
               },
               {
                 q: "What is Clay built with?",
-                a: "Next.js and React on the front, tRPC and Drizzle over Postgres on the back, Clerk for auth, and the Claude API driving the agent loop. The source is on GitHub.",
+                a: "Next.js and React on the front, tRPC and Drizzle over Postgres on the back, Clerk for auth, and the Claude API driving the agent loop. Around 250 tests, including a suite that tries to make the agent misbehave and a graded set that checks the views it builds are actually good. The source is on GitHub.",
               },
             ].map((item, i) => (
               <div
