@@ -44,7 +44,7 @@ export type SampleTask = {
 
 // Folders the sample projects are grouped into, in display order.
 export const sampleFolders = [
-  { name: "Customer facing", colorVar: "--chart-1" },
+  { name: "Customer Facing", colorVar: "--chart-1" },
   { name: "Platform", colorVar: "--chart-3" },
 ] as const;
 
