@@ -13,6 +13,7 @@ import { taskPriorities, taskStatuses } from "@/server/db/schema";
 import { statusMeta } from "@/lib/task-display";
 import { StatusBadge, PriorityBadge } from "@/components/task-badges";
 import { TaskDetailDialog } from "@/components/tasks/task-detail-dialog";
+import { ProjectHeader } from "@/components/tasks/project-header";
 import { ImportDialog } from "@/components/tasks/import-dialog";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -119,10 +120,19 @@ export default function ProjectPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       <div className="flex items-center justify-between">
-        <div className="space-y-1">
+        <div className="space-y-2">
           <h1 className="text-3xl font-semibold tracking-tight">{project.data?.name ?? "…"}</h1>
           {project.data?.description && (
             <p className="text-muted-foreground max-w-xl text-sm">{project.data.description}</p>
+          )}
+          {project.data && (
+            <ProjectHeader
+              lead={project.data.lead}
+              members={project.data.members}
+              targetDate={project.data.targetDate}
+              openPoints={project.data.stats.openPoints}
+              overdue={project.data.stats.overdue}
+            />
           )}
         </div>
         <div className="flex items-center gap-2">

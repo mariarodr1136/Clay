@@ -1,7 +1,20 @@
 import { db } from "./client";
-import { projects, tasks, activityLog, comments, memberships, users } from "./schema";
+import {
+  projects,
+  tasks,
+  activityLog,
+  comments,
+  memberships,
+  users,
+  agentThreads,
+  agentMessages,
+  views,
+  viewVersions,
+} from "./schema";
+import { eq } from "drizzle-orm";
 import {
   sampleComments,
+  sampleConversations,
   sampleProjects,
   sampleTeammates,
   type SampleTask,
@@ -80,6 +93,17 @@ export async function seedSampleData(
         organizationId,
         name: project.name,
         description: project.description,
+        // Leads only exist when there are teammates to be one; otherwise
+        // the person seeding is the only candidate and "led by you" on your
+        // own workspace is noise.
+        leadId:
+          options.withTeammates && project.lead !== undefined
+            ? teammateIds[project.lead]
+            : null,
+        targetDate:
+          project.targetInDays === undefined
+            ? null
+            : isoDate(daysAgo(-project.targetInDays)),
         createdBy: userId,
         createdAt: daysAgo(90),
       }))
@@ -159,4 +183,113 @@ export async function seedSampleData(
 
   // The first project is what callers hand to the agent as context.
   return insertedProjects[0];
+}
+
+
+// Everything that depends on views existing, so it runs after
+// seedSampleViews rather than inside seedSampleData.
+//
+// Conversations are written as ordinary agent_messages rows — the same shape
+// a live run produces — so the chat page replays them through exactly the
+// path a real conversation takes. The publish, rollback and blocked events
+// go through activity_log and view_versions the same way the real actions
+// do, which is what gives the audit log every one of its kinds.
+export async function seedSampleHistory(
+  organizationId: string,
+  userId: string,
+  options: { publish?: string[]; rollBack?: string } = {}
+) {
+  const all = await db
+    .select({ id: views.id, name: views.name, currentVersionId: views.currentVersionId })
+    .from(views)
+    .where(eq(views.organizationId, organizationId));
+  const byName = new Map(all.map((view) => [view.name, view]));
+
+  for (const conversation of sampleConversations) {
+    const view = conversation.viewName ? byName.get(conversation.viewName) : undefined;
+    const startedAt = daysAgo(conversation.daysAgo);
+
+    const [thread] = await db
+      .insert(agentThreads)
+      .values({
+        organizationId,
+        userId,
+        viewId: view?.id ?? null,
+        title: conversation.title,
+        createdAt: startedAt,
+        updatedAt: startedAt,
+      })
+      .returning();
+
+    await db.insert(agentMessages).values(
+      conversation.turns.map((turn, index) => ({
+        threadId: thread.id,
+        seq: index,
+        role: turn.role,
+        // Assistant turns are content blocks, user turns plain strings —
+        // matching what runAgentLoop persists.
+        content:
+          turn.role === "user"
+            ? (turn.text as unknown as Record<string, unknown>)
+            : ([{ type: "text", text: turn.text }] as unknown as Record<string, unknown>),
+        createdAt: new Date(startedAt.getTime() + index * 60_000),
+      }))
+    );
+  }
+
+  for (const name of options.publish ?? []) {
+    const view = byName.get(name);
+    if (!view) continue;
+    await db.update(views).set({ scope: "org" }).where(eq(views.id, view.id));
+    await db.insert(activityLog).values({
+      organizationId,
+      actorId: userId,
+      verb: "view.published",
+      entityType: "view",
+      entityId: view.id,
+      metadata: { name },
+      createdAt: daysAgo(1),
+    });
+  }
+
+  // One proposal the validator refused, so the audit log's guardrail row
+  // isn't hypothetical. Same shape propose_view records on a real rejection.
+  await db.insert(activityLog).values({
+    organizationId,
+    actorId: userId,
+    verb: "view.proposal_blocked",
+    entityType: "view",
+    entityId: "00000000-0000-0000-0000-000000000000",
+    metadata: {
+      name: "Revenue by segment",
+      reasons: ['Widget "revenueChart": unknown query catalog id "revenueBySegment"'],
+    },
+    createdAt: daysAgo(2),
+  });
+
+  const rollBackTarget = options.rollBack ? byName.get(options.rollBack) : undefined;
+  if (rollBackTarget?.currentVersionId) {
+    const [current] = await db
+      .select()
+      .from(viewVersions)
+      .where(eq(viewVersions.id, rollBackTarget.currentVersionId));
+    if (current) {
+      const [restored] = await db
+        .insert(viewVersions)
+        .values({
+          viewId: rollBackTarget.id,
+          schemaJson: current.schemaJson,
+          createdBy: "user",
+          kind: "reverted",
+          promptText: "Reverted to an earlier version",
+          parentVersionId: current.id,
+          createdAt: daysAgo(1),
+        })
+        .returning();
+      await db
+        .update(views)
+        .set({ currentVersionId: restored.id })
+        .where(eq(views.id, rollBackTarget.id));
+    }
+  }
 }

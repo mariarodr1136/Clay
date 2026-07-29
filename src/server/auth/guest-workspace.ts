@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, gt, isNotNull, lt } from "drizzle-orm";
 import { db } from "@/server/db/client";
 import { organizations, memberships, users } from "@/server/db/schema";
-import { seedSampleData } from "@/server/db/seed-sample-data";
+import { seedSampleData, seedSampleHistory } from "@/server/db/seed-sample-data";
 import { seedSampleViews } from "@/server/db/seed-sample-views";
 import { GUEST_TTL_MS, type GuestSession } from "./guest-session";
 
@@ -46,6 +46,12 @@ export async function createGuestWorkspace(): Promise<GuestSession> {
   // invented colleagues in their member list.
   const project = await seedSampleData(organizationId, userId, { withTeammates: true });
   await seedSampleViews(organizationId, userId, project.id);
+  // Runs last because it needs the views: conversations link to what they
+  // produced, and publishing is a change to an existing view.
+  await seedSampleHistory(organizationId, userId, {
+    publish: ["Delivery Overview", "Team Workload"],
+    rollBack: "Portfolio Health",
+  });
 
   return { userId, organizationId };
 }

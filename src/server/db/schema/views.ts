@@ -16,6 +16,13 @@ export type ViewScope = (typeof viewScopes)[number];
 export const viewVersionCreators = ["agent", "user"] as const;
 export type ViewVersionCreator = (typeof viewVersionCreators)[number];
 
+// What kind of change produced this version. Derivable-ish before (a null
+// parent meant "created"), but a revert was indistinguishable from an
+// ordinary edit, which is exactly the distinction an audit log exists to
+// make.
+export const viewVersionKinds = ["created", "refined", "reverted"] as const;
+export type ViewVersionKind = (typeof viewVersionKinds)[number];
+
 export const views = pgTable(
   "views",
   {
@@ -53,6 +60,7 @@ export const viewVersions = pgTable(
       .references(() => views.id, { onDelete: "cascade" }),
     schemaJson: jsonb("schema_json").notNull().$type<Record<string, unknown>>(),
     createdBy: text("created_by", { enum: viewVersionCreators }).notNull(),
+    kind: text("kind", { enum: viewVersionKinds }).notNull().default("created"),
     promptText: text("prompt_text"),
     parentVersionId: uuid("parent_version_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

@@ -45,12 +45,18 @@ export type SampleTask = {
 export type SampleProject = {
   name: string;
   description: string;
+  // Index into sampleTeammates. The lead shows in the project header.
+  lead?: number;
+  // Days from today the project is aiming to land.
+  targetInDays?: number;
   tasks: SampleTask[];
 };
 
 export const sampleProjects: SampleProject[] = [
   {
     name: "Website Relaunch",
+    lead: 0,
+    targetInDays: 14,
     description: "Rebuild the marketing site and ship the new pricing page.",
     tasks: [
       { title: "Pick a CMS and get sign-off", description: "Shortlist three, cost them out, agree with marketing.", status: "done", priority: "high", points: 5, owner: 0, doneWeeksAgo: 11, cycleDays: 9 },
@@ -67,6 +73,8 @@ export const sampleProjects: SampleProject[] = [
   },
   {
     name: "Mobile App v2",
+    lead: 3,
+    targetInDays: 45,
     description: "Offline mode, a faster sync engine, and a refreshed shell.",
     tasks: [
       { title: "Spike: local-first storage options", status: "done", priority: "high", points: 5, owner: 3, doneWeeksAgo: 9, cycleDays: 6 },
@@ -82,6 +90,8 @@ export const sampleProjects: SampleProject[] = [
   },
   {
     name: "Billing Migration",
+    lead: 1,
+    targetInDays: 21,
     description: "Move off the legacy biller without dropping a single invoice.",
     tasks: [
       { title: "Reconcile legacy invoice export", status: "done", priority: "urgent", points: 8, owner: 1, doneWeeksAgo: 10, cycleDays: 14 },
@@ -95,6 +105,8 @@ export const sampleProjects: SampleProject[] = [
   },
   {
     name: "Customer Onboarding",
+    lead: 2,
+    targetInDays: 60,
     description: "Cut time-to-first-value from days to under an hour.",
     tasks: [
       { title: "Map the current onboarding funnel", status: "done", priority: "medium", points: 5, owner: 2, doneWeeksAgo: 8, cycleDays: 5 },
@@ -107,6 +119,8 @@ export const sampleProjects: SampleProject[] = [
   },
   {
     name: "Data Platform",
+    lead: 3,
+    targetInDays: 30,
     description: "One warehouse, one set of definitions, no more spreadsheet forks.",
     tasks: [
       { title: "Stand up the warehouse", status: "done", priority: "high", points: 8, owner: 1, doneWeeksAgo: 12, cycleDays: 10 },
@@ -120,6 +134,8 @@ export const sampleProjects: SampleProject[] = [
   },
   {
     name: "Design System",
+    lead: 4,
+    targetInDays: 75,
     description: "One vocabulary of components, documented and adopted.",
     tasks: [
       { title: "Audit component drift across surfaces", status: "done", priority: "medium", points: 5, owner: 2, doneWeeksAgo: 7, cycleDays: 7 },
@@ -143,4 +159,74 @@ export const sampleComments: { taskTitle: string; author: number; body: string }
   { taskTitle: "Crash-free rate back above 99.5%", author: 1, body: "Down to one repeating crash, in the sync scheduler. Fix is in review." },
   { taskTitle: "Accessibility pass on form controls", author: 4, body: "Focus order is wrong on every multi-step form. Bigger than the estimate — flagging now rather than at the end." },
   { taskTitle: "Fix broken redirects from old URLs", author: 0, body: "Search console is showing 340 404s a day. This should jump the queue." },
+];
+
+
+// Agent conversations seeded into the demo, so the chat page shows real
+// history rather than an empty panel. These are stored as ordinary
+// agent_messages rows — the same shape a live run writes — and the view each
+// one produced is linked by name.
+export type SampleConversation = {
+  title: string;
+  viewName?: string;
+  daysAgo: number;
+  turns: { role: "user" | "assistant"; text: string }[];
+};
+
+export const sampleConversations: SampleConversation[] = [
+  {
+    title: "Build me a delivery dashboard: open work, overdue risk, and where things stand",
+    viewName: "Delivery Overview",
+    daysAgo: 6,
+    turns: [
+      {
+        role: "user",
+        text: "Build me a delivery dashboard: open work, overdue risk, and where things stand.",
+      },
+      {
+        role: "assistant",
+        text: "Built it. I led with three counts — open, overdue, waiting on review — then a stacked bar of status per project so you can see which one is carrying the risk, and a donut of where the remaining effort sits. Overdue is styled as a danger figure since any non-zero value there is a problem.",
+      },
+      { role: "user", text: "Add velocity to it — I want to see whether we're speeding up." },
+      {
+        role: "assistant",
+        text: "Added a points-shipped tile with a sparkline and a week-over-week change. It reads velocityByWeek, so the trend is computed from the same rows the number comes from rather than being decorative.",
+      },
+    ],
+  },
+  {
+    title: "Which project is most behind?",
+    daysAgo: 4,
+    turns: [
+      { role: "user", text: "Which project is most behind? Just tell me, don't build anything." },
+      {
+        role: "assistant",
+        text: "Mobile App v2. It has two overdue tasks against a 45-day target, and both are urgent — the crash-free rate work is 31 days open and offline conflict resolution is 24. Billing Migration has one overdue item but it's a sign-off, not engineering work.",
+      },
+    ],
+  },
+  {
+    title: "Who is carrying what right now?",
+    viewName: "Team Workload",
+    daysAgo: 3,
+    turns: [
+      { role: "user", text: "Who is carrying what right now, and who is closest to overloaded?" },
+      {
+        role: "assistant",
+        text: "Here's open work per person, split by status, next to the total points in flight. I also dropped in a table of everything in progress with live status dropdowns, so you can move things off someone without leaving the view.",
+      },
+    ],
+  },
+  {
+    title: "How fast are we going, and is cycle time getting better or worse?",
+    viewName: "Velocity & Flow",
+    daysAgo: 2,
+    turns: [
+      { role: "user", text: "How fast are we going, and is our cycle time getting better or worse?" },
+      {
+        role: "assistant",
+        text: "Two trend tiles and three charts. Velocity is trending up; cycle time is trending down, which is the good direction for that one — so its arrow is green while pointing down. Created-vs-completed is there too, since velocity alone won't tell you if you're falling behind on inflow.",
+      },
+    ],
+  },
 ];

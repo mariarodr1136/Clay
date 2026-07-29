@@ -3,12 +3,13 @@ import { z } from "zod";
 import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { db } from "@/server/db/client";
-import { views, viewVersions, viewTemplates } from "@/server/db/schema";
+import { views, viewVersions, viewTemplates, activityLog, users } from "@/server/db/schema";
 import { layoutItemSchema, viewSchema } from "@/lib/dsl/schema";
 import { runCatalogQuery } from "@/server/data-access/catalog";
 import { runCatalogMutation } from "@/server/data-access/mutations";
 import { createView, patchView } from "@/server/db/create-view";
 import { activeView, activeViewsInOrg } from "@/server/db/view-access";
+import { recordViewEvent, VIEW_EVENT_VERBS } from "@/server/db/view-events";
 import { NotFoundError } from "@/server/errors";
 import type { ViewInput } from "@/lib/dsl/schema";
 
@@ -188,6 +189,7 @@ export const viewsRouter = router({
         viewId: input.viewId,
         schema: target.schemaJson as ViewInput,
         createdBy: "user",
+        kind: "reverted",
         promptText: `Reverted to an earlier version`,
       });
     }),
@@ -204,6 +206,14 @@ export const viewsRouter = router({
         .where(activeView(input.viewId, ctx.organizationId))
         .returning();
       if (!updated) throw new NotFoundError("View");
+
+      await recordViewEvent({
+        organizationId: ctx.organizationId,
+        actorId: ctx.userId,
+        verb: VIEW_EVENT_VERBS.published,
+        viewId: input.viewId,
+        metadata: { name: updated.name },
+      });
       return updated;
     }),
 
@@ -294,23 +304,87 @@ export const viewsRouter = router({
   listActivity: protectedProcedure
     .input(z.object({ limit: z.number().int().min(1).max(100).default(50) }))
     .query(async ({ ctx, input }) => {
-      return db
-        .select({
-          id: viewVersions.id,
-          viewId: viewVersions.viewId,
-          viewName: views.name,
-          createdBy: viewVersions.createdBy,
-          promptText: viewVersions.promptText,
-          createdAt: viewVersions.createdAt,
-          // First version of a view has no parent — lets the UI distinguish
-          // "created" from "refined" without another query.
-          parentVersionId: viewVersions.parentVersionId,
-        })
-        .from(viewVersions)
-        .innerJoin(views, eq(views.id, viewVersions.viewId))
-        .where(activeViewsInOrg(ctx.organizationId))
-        .orderBy(desc(viewVersions.createdAt))
-        .limit(input.limit);
+      // Two sources, one timeline. view_versions covers content changes;
+      // activity_log covers everything that changes a view without changing
+      // its content — publishing, and proposals the validator refused,
+      // which never became versions at all.
+      const [versions, events] = await Promise.all([
+        db
+          .select({
+            id: viewVersions.id,
+            viewId: viewVersions.viewId,
+            viewName: views.name,
+            createdBy: viewVersions.createdBy,
+            kind: viewVersions.kind,
+            promptText: viewVersions.promptText,
+            createdAt: viewVersions.createdAt,
+          })
+          .from(viewVersions)
+          .innerJoin(views, eq(views.id, viewVersions.viewId))
+          .where(activeViewsInOrg(ctx.organizationId))
+          .orderBy(desc(viewVersions.createdAt))
+          .limit(input.limit),
+        db
+          .select({
+            id: activityLog.id,
+            viewId: activityLog.entityId,
+            verb: activityLog.verb,
+            metadata: activityLog.metadata,
+            createdAt: activityLog.createdAt,
+            actorName: users.name,
+          })
+          .from(activityLog)
+          .leftJoin(users, eq(users.id, activityLog.actorId))
+          .where(
+            and(
+              eq(activityLog.organizationId, ctx.organizationId),
+              eq(activityLog.entityType, "view")
+            )
+          )
+          .orderBy(desc(activityLog.createdAt))
+          .limit(input.limit),
+      ]);
+
+      const VERB_KIND: Record<string, "published" | "unpublished" | "blocked"> = {
+        "view.published": "published",
+        "view.unpublished": "unpublished",
+        "view.proposal_blocked": "blocked",
+      };
+
+      const entries = [
+        ...versions.map((version) => ({
+          id: version.id,
+          viewId: version.viewId,
+          viewName: version.viewName,
+          kind: version.kind as string,
+          createdBy: version.createdBy as "agent" | "user" | null,
+          actorName: null as string | null,
+          promptText: version.promptText,
+          detail: null as string | null,
+          createdAt: version.createdAt,
+        })),
+        ...events.flatMap((event) => {
+          const kind = VERB_KIND[event.verb];
+          if (!kind) return [];
+          const meta = (event.metadata ?? {}) as { name?: string; reasons?: string[] };
+          return [
+            {
+              id: event.id,
+              viewId: event.viewId,
+              viewName: meta.name ?? "Untitled view",
+              kind,
+              createdBy: kind === "blocked" ? ("agent" as const) : ("user" as const),
+              actorName: event.actorName,
+              promptText: null,
+              detail: meta.reasons?.join(" · ") ?? null,
+              createdAt: event.createdAt,
+            },
+          ];
+        }),
+      ];
+
+      entries.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      return entries.slice(0, input.limit);
     }),
 
   unpublish: protectedProcedure
@@ -322,6 +396,14 @@ export const viewsRouter = router({
         .where(activeView(input.viewId, ctx.organizationId))
         .returning();
       if (!updated) throw new NotFoundError("View");
+
+      await recordViewEvent({
+        organizationId: ctx.organizationId,
+        actorId: ctx.userId,
+        verb: VIEW_EVENT_VERBS.unpublished,
+        viewId: input.viewId,
+        metadata: { name: updated.name },
+      });
       return updated;
     }),
 

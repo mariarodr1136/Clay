@@ -2,8 +2,8 @@ import { z } from "zod";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { router, protectedProcedure, ownerProcedure } from "../trpc";
 import { db } from "@/server/db/client";
-import { projects, tasks } from "@/server/db/schema";
-import { seedSampleData } from "@/server/db/seed-sample-data";
+import { projects, tasks, users } from "@/server/db/schema";
+import { seedSampleData, seedSampleHistory } from "@/server/db/seed-sample-data";
 import { seedSampleViews } from "@/server/db/seed-sample-views";
 import { ConflictError, NotFoundError } from "@/server/errors";
 
@@ -50,6 +50,9 @@ export const projectsRouter = router({
     }
     const project = await seedSampleData(ctx.organizationId, ctx.userId);
     await seedSampleViews(ctx.organizationId, ctx.userId, project.id);
+    await seedSampleHistory(ctx.organizationId, ctx.userId, {
+      publish: ["Delivery Overview"],
+    });
     return project;
   }),
 
@@ -60,7 +63,47 @@ export const projectsRouter = router({
         where: and(eq(projects.id, input.id), eq(projects.organizationId, ctx.organizationId)),
       });
       if (!project) throw new NotFoundError("Project");
-      return project;
+
+      // Everything the header shows, in one round trip. The people are
+      // derived from who actually holds work rather than stored, so the list
+      // stays true without anyone maintaining it.
+      const [lead] = project.leadId
+        ? await db
+            .select({ id: users.id, name: users.name, imageUrl: users.imageUrl })
+            .from(users)
+            .where(eq(users.id, project.leadId))
+        : [];
+
+      const members = await db
+        .selectDistinct({ id: users.id, name: users.name, imageUrl: users.imageUrl })
+        .from(tasks)
+        .innerJoin(users, eq(users.id, tasks.assigneeId))
+        .where(
+          and(eq(tasks.projectId, project.id), eq(tasks.organizationId, ctx.organizationId))
+        );
+
+      const [totals] = await db
+        .select({
+          total: sql<number>`count(*)::int`,
+          done: sql<number>`count(*) filter (where ${tasks.status} = 'done')::int`,
+          openPoints: sql<number>`coalesce(sum(${tasks.points}) filter (where ${tasks.status} != 'done'), 0)::int`,
+          overdue: sql<number>`count(*) filter (where ${tasks.status} != 'done' and ${tasks.dueDate} < current_date)::int`,
+        })
+        .from(tasks)
+        .where(
+          and(eq(tasks.projectId, project.id), eq(tasks.organizationId, ctx.organizationId))
+        );
+
+      return {
+        ...project,
+        lead: lead ?? null,
+        members,
+        stats: {
+          ...totals,
+          percentComplete:
+            totals.total === 0 ? 0 : Math.round((totals.done / totals.total) * 100),
+        },
+      };
     }),
 
   create: protectedProcedure

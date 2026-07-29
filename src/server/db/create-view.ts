@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "./client";
-import { views, viewVersions, type ViewVersionCreator } from "./schema";
+import { views, viewVersions, type ViewVersionCreator, type ViewVersionKind } from "./schema";
 import { activeView } from "./view-access";
 import { NotFoundError } from "@/server/errors";
 import type { ViewInput } from "@/lib/dsl/schema";
@@ -33,6 +33,7 @@ export async function createView(params: {
         viewId: view.id,
         schemaJson: params.schema,
         createdBy: params.createdBy,
+        kind: "created",
         promptText: params.promptText,
       })
       .returning();
@@ -60,6 +61,9 @@ export async function patchView(params: {
   schema: ViewInput;
   createdBy: ViewVersionCreator;
   promptText?: string;
+  // "refined" unless the caller is restoring an earlier version, which the
+  // audit log shows differently — a revert undoes work, an edit adds to it.
+  kind?: Exclude<ViewVersionKind, "created">;
 }) {
   return db.transaction(async (tx) => {
     const view = await tx.query.views.findFirst({
@@ -81,6 +85,7 @@ export async function patchView(params: {
         viewId: view.id,
         schemaJson: schema,
         createdBy: params.createdBy,
+        kind: params.kind ?? "refined",
         promptText: params.promptText,
         parentVersionId: view.currentVersionId,
       })

@@ -3,20 +3,56 @@
 import { useState } from "react";
 import Link from "next/link";
 import { format, formatDistanceToNow, isToday, isYesterday } from "date-fns";
-import { Bot, GitBranch, History, ListChecks, Pencil, UserRound } from "lucide-react";
+import {
+  Bot,
+  EyeOff,
+  GitBranch,
+  History,
+  ListChecks,
+  Pencil,
+  Send,
+  ShieldAlert,
+  Undo2,
+  UserRound,
+} from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+
+type AuditKind = "created" | "refined" | "reverted" | "published" | "unpublished" | "blocked";
 
 type ActivityEntry = {
   id: string;
   viewId: string;
   viewName: string;
-  createdBy: "agent" | "user";
+  kind: string;
+  createdBy: "agent" | "user" | null;
+  actorName: string | null;
   promptText: string | null;
+  detail: string | null;
   createdAt: string | Date;
-  parentVersionId: string | null;
 };
+
+// One row per kind of thing that can happen to a view. Colours come from the
+// same status tokens the rest of the app uses, so "published" reads as
+// finished and "blocked" reads as a stop.
+const KIND_META: Record<AuditKind, { label: string; colorVar: string; icon: typeof GitBranch }> = {
+  created: { label: "Created", colorVar: "--status-in-progress", icon: GitBranch },
+  refined: { label: "Refined", colorVar: "--status-in-review", icon: Pencil },
+  reverted: { label: "Rolled back", colorVar: "--status-todo", icon: Undo2 },
+  published: { label: "Published", colorVar: "--status-done", icon: Send },
+  unpublished: { label: "Unpublished", colorVar: "--status-todo", icon: EyeOff },
+  blocked: { label: "Blocked", colorVar: "--destructive", icon: ShieldAlert },
+};
+
+const KIND_ORDER: AuditKind[] = [
+  "created",
+  "refined",
+  "published",
+  "reverted",
+  "unpublished",
+  "blocked",
+];
 
 function dayLabel(date: Date) {
   if (isToday(date)) return "Today";
@@ -37,10 +73,7 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub: st
 }
 
 function AuditEntry({ entry }: { entry: ActivityEntry }) {
-  const created = !entry.parentVersionId;
-  const meta = created
-    ? { label: "Created", colorVar: "--status-in-progress", icon: GitBranch }
-    : { label: "Refined", colorVar: "--status-in-review", icon: Pencil };
+  const meta = KIND_META[(entry.kind as AuditKind) ?? "created"] ?? KIND_META.created;
   const when = new Date(entry.createdAt);
 
   return (
@@ -80,12 +113,14 @@ function AuditEntry({ entry }: { entry: ActivityEntry }) {
           {entry.createdBy === "agent" ? (
             <>
               <Bot className="size-3.5" />
-              Agent, from a prompt
+              {entry.kind === "blocked"
+                ? "Agent proposal, stopped by validation"
+                : "Agent, from a prompt"}
             </>
           ) : (
             <>
               <UserRound className="size-3.5" />
-              Manual edit
+              {entry.actorName ?? "Manual edit"}
             </>
           )}
         </p>
@@ -93,6 +128,12 @@ function AuditEntry({ entry }: { entry: ActivityEntry }) {
         {entry.promptText && (
           <p className="text-muted-foreground border-border mt-2 border-l-2 pl-3 text-sm italic">
             &ldquo;{entry.promptText}&rdquo;
+          </p>
+        )}
+
+        {entry.detail && (
+          <p className="text-destructive/90 mt-2 border-l-2 border-destructive/40 pl-3 text-xs">
+            {entry.detail}
           </p>
         )}
       </div>
@@ -180,11 +221,12 @@ function WorkActivityFeed() {
 
 export default function AuditPage() {
   const activityQuery = trpc.views.listActivity.useQuery({ limit: 100 });
-  const [actorFilter, setActorFilter] = useState<"agent" | "user" | null>(null);
+  const [kindFilter, setKindFilter] = useState<AuditKind | null>(null);
   const [tab, setTab] = useState<"views" | "work">("views");
 
   const all = (activityQuery.data ?? []) as ActivityEntry[];
-  const entries = actorFilter ? all.filter((e) => e.createdBy === actorFilter) : all;
+  const entries = kindFilter ? all.filter((e) => e.kind === kindFilter) : all;
+  const countOf = (kind: AuditKind) => all.filter((e) => e.kind === kind).length;
 
   const viewsTouched = new Set(all.map((e) => e.viewId)).size;
   const agentActions = all.filter((e) => e.createdBy === "agent").length;
@@ -260,7 +302,7 @@ export default function AuditPage() {
 
       {tab === "views" && all.length > 0 && (
         <>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatTile label="Events" value={String(all.length)} sub="most recent 100" />
             <StatTile label="Views touched" value={String(viewsTouched)} sub="created or changed" />
             <StatTile
@@ -268,27 +310,39 @@ export default function AuditPage() {
               value={String(agentActions)}
               sub="every one traceable to a prompt"
             />
+            <StatTile
+              label="Blocked proposals"
+              value={String(countOf("blocked"))}
+              sub="stopped by validation"
+            />
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {(
-              [
-                [null, `All · ${all.length}`],
-                ["agent", `Agent · ${agentActions}`],
-                ["user", `Manual · ${all.length - agentActions}`],
-              ] as const
-            ).map(([value, label]) => (
+            <button
+              onClick={() => setKindFilter(null)}
+              className={cn(
+                "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                kindFilter === null
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:text-foreground"
+              )}
+            >
+              All · {all.length}
+            </button>
+            {/* Only kinds that actually occurred — an empty "Blocked · 0"
+                chip is noise, and its absence is itself information. */}
+            {KIND_ORDER.filter((kind) => countOf(kind) > 0).map((kind) => (
               <button
-                key={label}
-                onClick={() => setActorFilter(value)}
+                key={kind}
+                onClick={() => setKindFilter(kind)}
                 className={cn(
                   "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
-                  actorFilter === value
+                  kindFilter === kind
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground hover:text-foreground"
                 )}
               >
-                {label}
+                {KIND_META[kind].label} · {countOf(kind)}
               </button>
             ))}
           </div>

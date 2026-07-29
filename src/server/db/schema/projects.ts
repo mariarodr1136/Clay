@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, date, index } from "drizzle-orm/pg-core";
 import { organizations } from "./organizations";
 import { users } from "./users";
 
@@ -11,6 +11,11 @@ export const projects = pgTable(
       .references(() => organizations.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     description: text("description"),
+    // Who is accountable for the project, and when it's aiming to land.
+    // Both optional: plenty of projects have neither, and forcing a lead
+    // would make creating one a two-step affair.
+    leadId: text("lead_id").references(() => users.id, { onDelete: "set null" }),
+    targetDate: date("target_date"),
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),

@@ -4,11 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowUpRight, FolderKanban, KeyRound, MessageSquareText } from "lucide-react";
+import { FolderKanban, KeyRound, MessageSquareText } from "lucide-react";
 import { trpc } from "@/lib/trpc/client";
 import { useAgentStream } from "@/lib/use-agent-stream";
 import { useByokKey, useByokModel } from "@/lib/use-byok-key";
 import { TranscriptList } from "@/components/agent/transcript-list";
+import { ConversationHistory } from "@/components/agent/conversation-history";
 import { ModelPicker } from "@/components/agent/model-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -164,16 +165,9 @@ export default function ChatPage() {
         </>
       )}
 
-      <p className="text-muted-foreground text-xs">
-        Want to see what a full conversation looks like first?{" "}
-        <Link
-          href="/demo/chat"
-          className="text-foreground inline-flex items-center gap-0.5 font-medium hover:underline"
-        >
-          Watch example transcripts in the demo
-          <ArrowUpRight className="size-3" />
-        </Link>
-      </p>
+      {/* Replaces a link to the old /demo/chat page, which no longer
+          exists — the real history is better than a scripted example. */}
+      <ConversationHistory />
     </div>
   );
 }
