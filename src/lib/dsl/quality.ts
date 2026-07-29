@@ -73,7 +73,26 @@ function checkLayout(view: ViewInput, problems: QualityProblem[]) {
   }
 }
 
-function checkWidget(widget: Widget, layout: LayoutItem | undefined, problems: QualityProblem[]) {
+function checkWidget(
+  widget: Widget,
+  layout: LayoutItem | undefined,
+  problems: QualityProblem[],
+  timeSeriesQueryIds: ReadonlySet<string>
+) {
+  if ((widget.type === "kpi" || widget.type === "computedField") && widget.config.trend) {
+    // A trend is a claim about direction over time. Allowing one over an
+    // unordered result would let a tile show a confident arrow derived from
+    // whatever order the rows happened to come back in.
+    const queryId = widget.dataBinding.queryId;
+    if (!timeSeriesQueryIds.has(queryId)) {
+      problems.push({
+        severity: "error",
+        code: "kpi.trendWithoutSeries",
+        message: `KPI "${widget.id}" asks for a trend, but "${queryId}" doesn't return an ordered series over time. Use one of: ${[...timeSeriesQueryIds].join(", ")}.`,
+      });
+    }
+  }
+
   if (widget.type === "chart") {
     const config = widget.config;
     if (config.chartType === "donut") {
@@ -132,18 +151,29 @@ function checkWidget(widget: Widget, layout: LayoutItem | undefined, problems: Q
   }
 }
 
-export function findViewProblems(view: ViewInput): QualityProblem[] {
+// The catalog ids whose rows are an ordered series. Passed in rather than
+// imported so this module stays free of server-only code and can run in the
+// browser and in tests unchanged.
+export type QualityOptions = {
+  timeSeriesQueryIds?: Iterable<string>;
+};
+
+export function findViewProblems(
+  view: ViewInput,
+  options: QualityOptions = {}
+): QualityProblem[] {
   const problems: QualityProblem[] = [];
   const layout = layoutById(view);
+  const timeSeries = new Set(options.timeSeriesQueryIds ?? []);
 
   checkLayout(view, problems);
   for (const widget of view.widgets) {
-    checkWidget(widget, layout.get(widget.id), problems);
+    checkWidget(widget, layout.get(widget.id), problems, timeSeries);
   }
 
   return problems;
 }
 
-export function viewErrors(view: ViewInput): QualityProblem[] {
-  return findViewProblems(view).filter((problem) => problem.severity === "error");
+export function viewErrors(view: ViewInput, options: QualityOptions = {}): QualityProblem[] {
+  return findViewProblems(view, options).filter((problem) => problem.severity === "error");
 }

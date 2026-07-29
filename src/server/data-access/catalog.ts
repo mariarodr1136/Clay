@@ -29,6 +29,10 @@ type CatalogEntry = {
   // Exports run at this ceiling instead of the widget's default; aggregate
   // queries leave it unset because they're already one row per group.
   exportRowLimit?: number;
+  // Set on queries whose rows are an ordered series over time. Only these
+  // can back a KPI trend: a sparkline or a period-over-period delta drawn
+  // from unordered rows would be a claim the data doesn't support.
+  timeSeries?: boolean;
 };
 
 // The single allow-listed, org-scoped surface for reading task data. Every
@@ -62,6 +66,7 @@ export const queryCatalog = {
     description: "Count of tasks completed per day over a recent window.",
     paramsSchema: completionsOverTimeParams,
     run: completionsOverTime,
+    timeSeries: true,
   },
   tasksByAssignee: {
     description: "Count of tasks grouped by assignee.",
@@ -97,18 +102,21 @@ export const queryCatalog = {
       "Story points and task count completed per week ({ week, points, tasks }) over the last N weeks (default 8) — the velocity trend; ideal for a line or bar chart with xField 'week'.",
     paramsSchema: velocityByWeekParams,
     run: velocityByWeek,
+    timeSeries: true,
   },
   createdVsCompleted: {
     description:
       "Tasks created vs completed per day ({ day, created, completed }) over the last N days (default 30) — inflow vs outflow; ideal for a two-series line/area chart with xField 'day'.",
     paramsSchema: createdVsCompletedParams,
     run: createdVsCompleted,
+    timeSeries: true,
   },
   cycleTimeByWeek: {
     description:
       "Average days from task creation to completion, per week completed ({ week, avgDays, tasks }) over the last N weeks (default 8) — the cycle-time trend; ideal for a line chart with xField 'week', yField 'avgDays'.",
     paramsSchema: cycleTimeByWeekParams,
     run: cycleTimeByWeek,
+    timeSeries: true,
   },
   agingWip: {
     description:
@@ -255,4 +263,12 @@ export async function runCatalogQueryForExport(
   const rows = Array.isArray(result) ? result : [];
 
   return { rows, truncated: rowLimit !== null && rows.length >= rowLimit, rowLimit };
+}
+
+// Which catalog ids return an ordered series over time. Used by the view
+// quality checks to reject a KPI trend drawn over unordered rows.
+export function timeSeriesQueryIds(): string[] {
+  return Object.entries(queryCatalog)
+    .filter(([, entry]) => (entry as CatalogEntry).timeSeries)
+    .map(([id]) => id);
 }

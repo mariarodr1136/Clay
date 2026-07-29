@@ -66,6 +66,23 @@ const aggregateConfig = z.object({
   // "danger" renders the value in the destructive color — for figures where
   // a non-zero value is a problem (overdue counts, blockers).
   intent: z.enum(["default", "danger"]).optional(),
+  // A sparkline and a period-over-period delta, both computed from the
+  // tile's own bound rows — never authored. `field` names a numeric column
+  // on those rows, and the last two values give the change.
+  //
+  // Only meaningful over a query that returns an ordered series, so
+  // findViewProblems rejects it on any other binding. That restriction is
+  // the point: a trend arrow is a claim about direction over time, and one
+  // drawn from unordered rows would be a confident lie.
+  trend: z
+    .object({
+      field: z.string().min(1),
+      // Which way is good. Velocity rising is good; cycle time rising is
+      // not. Decides the colour, never the arrow — the arrow follows the
+      // data.
+      goodDirection: z.enum(["up", "down"]).default("up"),
+    })
+    .optional(),
 });
 
 export const kpiWidgetSchema = z.object({

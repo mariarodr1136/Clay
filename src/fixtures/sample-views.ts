@@ -28,9 +28,10 @@ export function buildDemoViews(projectId: string): SampleViewFixture[] {
         scope: "personal",
         layout: {
           widgets: [
-            { id: "openKpi", x: 0, y: 0, w: 4, h: 2 },
-            { id: "overdueKpi", x: 4, y: 0, w: 4, h: 2 },
-            { id: "reviewKpi", x: 8, y: 0, w: 4, h: 2 },
+            { id: "openKpi", x: 0, y: 0, w: 3, h: 2 },
+            { id: "overdueKpi", x: 3, y: 0, w: 3, h: 2 },
+            { id: "reviewKpi", x: 6, y: 0, w: 3, h: 2 },
+            { id: "velocityKpi", x: 9, y: 0, w: 3, h: 2 },
             { id: "statusChart", x: 0, y: 2, w: 7, h: 3 },
             { id: "effortDonut", x: 7, y: 2, w: 5, h: 3 },
           ],
@@ -62,6 +63,22 @@ export function buildDemoViews(projectId: string): SampleViewFixture[] {
             title: "Waiting on review",
             dataBinding: { queryId: "tasksList", params: { status: "in_review", limit: 200 } },
             config: { aggregate: "count", label: "Waiting on review", format: "number" },
+          },
+          {
+            // The only tile with a trend: velocityByWeek returns an ordered
+            // series, so the sparkline and the delta are both computed from
+            // the rows behind the number.
+            id: "velocityKpi",
+            type: "kpi",
+            title: "Velocity",
+            dataBinding: { queryId: "velocityByWeek", params: { weeks: 8 } },
+            config: {
+              aggregate: "sum",
+              field: "points",
+              label: "Points shipped",
+              format: "number",
+              trend: { field: "points", goodDirection: "up" },
+            },
           },
           {
             id: "statusChart",

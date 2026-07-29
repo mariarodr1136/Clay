@@ -22,14 +22,54 @@ export async function seedSampleData(organizationId: string, userId: string) {
   };
 
   const seedTasks = [
+    // Finished work first, oldest to newest. A sample workspace with one
+    // completed task has no delivery history, which leaves velocity, cycle
+    // time and completions with a single bar each and a KPI trend with
+    // nothing to compare against.
+    {
+      title: "Pick a CMS and get sign-off",
+      description: "Shortlist three, cost them out, agree with marketing.",
+      status: "done" as const,
+      priority: "high" as const,
+      dueDate: daysFromNow(-40),
+      orderIndex: 0,
+      points: 5,
+    },
+    {
+      title: "Move DNS to the new provider",
+      description: "Cut over records with a short TTL, keep the old zone warm.",
+      status: "done" as const,
+      priority: "medium" as const,
+      dueDate: daysFromNow(-33),
+      orderIndex: 1,
+      points: 3,
+    },
+    {
+      title: "Agree the new sitemap",
+      description: "Collapse the old nav from nine sections to five.",
+      status: "done" as const,
+      priority: "medium" as const,
+      dueDate: daysFromNow(-26),
+      orderIndex: 2,
+      points: 8,
+    },
     {
       title: "Audit current site content",
       description: "Inventory pages, flag anything stale or off-brand.",
       status: "done" as const,
       priority: "medium" as const,
+      dueDate: daysFromNow(-19),
+      orderIndex: 3,
+      points: 8,
+    },
+    {
+      title: "Rebuild the component library",
+      description: "Buttons, forms, cards — everything the new pages need.",
+      status: "done" as const,
+      priority: "high" as const,
       dueDate: daysFromNow(-6),
-      orderIndex: 0,
-      points: 3,
+      orderIndex: 4,
+      points: 13,
     },
     {
       title: "Design new pricing page",
@@ -37,7 +77,7 @@ export async function seedSampleData(organizationId: string, userId: string) {
       status: "in_review" as const,
       priority: "high" as const,
       dueDate: daysFromNow(-1),
-      orderIndex: 1,
+      orderIndex: 5,
       points: 5,
     },
     {
@@ -46,7 +86,7 @@ export async function seedSampleData(organizationId: string, userId: string) {
       status: "in_progress" as const,
       priority: "medium" as const,
       dueDate: daysFromNow(4),
-      orderIndex: 2,
+      orderIndex: 6,
       points: 8,
     },
     {
@@ -55,7 +95,7 @@ export async function seedSampleData(organizationId: string, userId: string) {
       status: "in_progress" as const,
       priority: "urgent" as const,
       dueDate: daysFromNow(2),
-      orderIndex: 3,
+      orderIndex: 7,
       points: 3,
     },
     {
@@ -64,7 +104,7 @@ export async function seedSampleData(organizationId: string, userId: string) {
       status: "todo" as const,
       priority: "low" as const,
       dueDate: daysFromNow(10),
-      orderIndex: 4,
+      orderIndex: 8,
       points: 2,
     },
     {
@@ -73,7 +113,7 @@ export async function seedSampleData(organizationId: string, userId: string) {
       status: "todo" as const,
       priority: "high" as const,
       dueDate: daysFromNow(7),
-      orderIndex: 5,
+      orderIndex: 9,
       points: 3,
     },
     {
@@ -82,21 +122,45 @@ export async function seedSampleData(organizationId: string, userId: string) {
       status: "todo" as const,
       priority: "urgent" as const,
       dueDate: daysFromNow(-2),
-      orderIndex: 6,
+      orderIndex: 10,
       points: 2,
     },
   ];
 
+  // Spread the timestamps over the past couple of months instead of stamping
+  // everything with "now".
+  //
+  // Every time-series query in the catalog buckets by week or day —
+  // velocity, cycle time, completions, created-vs-completed — so a workspace
+  // seeded all at one instant collapses every one of them to a single bar,
+  // and a KPI trend has nothing to compare against. The sample workspace is
+  // the first thing a demo visitor and a new signup see, so its charts have
+  // to look like charts.
+  const weekAgo = (weeks: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() - weeks * 7);
+    return d;
+  };
+
   const insertedTasks = await db
     .insert(tasks)
     .values(
-      seedTasks.map((t) => ({
-        ...t,
-        organizationId,
-        projectId: project.id,
-        assigneeId: userId,
-        createdBy: userId,
-      }))
+      seedTasks.map((t, index) => {
+        // Done tasks land in successive past weeks, so velocity and cycle
+        // time have a real series; open work is recent, as it would be.
+        const completedWeeksAgo = 6 - index;
+        const finished = t.status === "done";
+        return {
+          ...t,
+          organizationId,
+          projectId: project.id,
+          assigneeId: userId,
+          createdBy: userId,
+          createdAt: weekAgo(finished ? completedWeeksAgo + 2 : 1),
+          // updatedAt is what the completion-based queries read.
+          updatedAt: finished ? weekAgo(Math.max(completedWeeksAgo, 0)) : weekAgo(0),
+        };
+      })
     )
     .returning();
 

@@ -1,4 +1,4 @@
-import { queryCatalog } from "@/server/data-access/catalog";
+import { queryCatalog, timeSeriesQueryIds } from "@/server/data-access/catalog";
 import { viewErrors } from "@/lib/dsl/quality";
 import { createView, patchView } from "@/server/db/create-view";
 import type { proposeViewInputSchema } from "./schemas";
@@ -46,7 +46,7 @@ export async function proposeViewTool(
   // rejecting a *proposal* that would render broken gives the agent feedback
   // it can act on, while views already in the database keep parsing and
   // rendering. Zod says "well-formed"; this says "usable".
-  const quality = viewErrors(input.schema);
+  const quality = viewErrors(input.schema, { timeSeriesQueryIds: timeSeriesQueryIds() });
   if (quality.length > 0) {
     return { ok: false, error: quality.map((problem) => problem.message).join(" | ") };
   }

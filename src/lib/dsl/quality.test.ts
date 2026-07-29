@@ -141,3 +141,41 @@ describe("view quality", () => {
     expect(problems.map((p) => p.code)).toContain("table.statusActionsWithoutColumn");
   });
 });
+
+describe("KPI trends", () => {
+  const kpi = (queryId: string, trend?: { field: string; goodDirection?: "up" | "down" }) =>
+    view(
+      [{ id: "k", x: 0, y: 0, w: 3, h: 2 }],
+      [
+        {
+          id: "k",
+          type: "kpi",
+          dataBinding: { queryId, params: {} },
+          config: {
+            label: "Velocity",
+            aggregate: "sum" as const,
+            field: "points",
+            format: "number" as const,
+            ...(trend ? { trend: { goodDirection: "up" as const, ...trend } } : {}),
+          },
+        },
+      ]
+    );
+
+  const timeSeries = { timeSeriesQueryIds: ["velocityByWeek", "cycleTimeByWeek"] };
+
+  it("allows a trend over an ordered series", () => {
+    expect(viewErrors(kpi("velocityByWeek", { field: "points" }), timeSeries)).toEqual([]);
+  });
+
+  it("rejects a trend over a query with no time ordering", () => {
+    // The guard that makes a fabricated trend impossible: tasksByStatusCount
+    // has no period, so an arrow over it would describe row order.
+    const errors = viewErrors(kpi("tasksByStatusCount", { field: "count" }), timeSeries);
+    expect(errors.map((e) => e.code)).toContain("kpi.trendWithoutSeries");
+  });
+
+  it("leaves a plain KPI over the same query alone", () => {
+    expect(viewErrors(kpi("tasksByStatusCount"), timeSeries)).toEqual([]);
+  });
+});
