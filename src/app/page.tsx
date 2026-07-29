@@ -8,20 +8,15 @@ import {
   Check,
   Circle,
   Code,
-  Database,
   CirclePlay,
   DollarSign,
   GitBranch,
   History,
   Lightbulb,
   MessageSquareText,
-  FileSpreadsheet,
   Plug,
   Rocket,
-  Search,
   ShieldCheck,
-  TrendingUp,
-  Upload,
   Sparkles,
   Star,
   Terminal,
@@ -139,10 +134,8 @@ export default async function Home() {
             <span className="text-primary">Watch it appear.</span>
           </h1>
           <p className="max-w-xl text-lg text-balance text-muted-foreground sm:text-xl">
-            Clay is a project tracker where the UI isn&apos;t fixed. Describe the
-            dashboard you need and an agent assembles it in seconds — from
-            validated building blocks, bound to your real data. It never writes
-            code, and it can never reach past the queries it&apos;s allowed.
+            A project tracker where the UI isn&apos;t fixed. Describe the dashboard
+            you need — Clay builds it against your real data, in seconds.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-sm text-muted-foreground">
             <span>Real data</span>
@@ -410,7 +403,7 @@ export default async function Home() {
               {
                 icon: Sparkles,
                 title: "Ask, Don't Configure",
-                body: "Describe a dashboard in plain language and it exists seconds later — no chart picker, no field mapping.",
+                body: "Describe a dashboard in plain language and it exists seconds later — no chart picker, no field mapping, no settings maze.",
               },
               {
                 icon: MessageSquareText,
@@ -425,47 +418,17 @@ export default async function Home() {
               {
                 icon: ShieldCheck,
                 title: "Guardrailed by Construction",
-                body: "The agent never writes code or SQL. It picks validated widgets and binds them to approved queries — a proposal that breaks the rules is refused before it saves.",
-              },
-              {
-                icon: Database,
-                title: "Your Data, One Database",
-                body: "Projects and tasks live in Postgres you control. Every view reads from it directly, so it's never stale.",
+                body: "The agent never writes code or SQL. It picks validated widgets and binds them to approved queries — so a generated view is safe the moment it appears.",
               },
               {
                 icon: Users,
                 title: "Built for a Team",
-                body: "Invite people into a shared workspace, assign work, and comment on tasks. Owners keep the destructive actions.",
-              },
-              {
-                icon: Upload,
-                title: "Bring Your Backlog",
-                body: "Import from CSV or Excel. Columns are matched for you, statuses translated from however your spreadsheet words them, with a dry run before anything is written.",
-              },
-              {
-                icon: TrendingUp,
-                title: "Trends That Counted",
-                body: "Tiles carry sparklines and period-over-period deltas computed from their own data — never a decorative arrow.",
-              },
-              {
-                icon: FileSpreadsheet,
-                title: "Exports That Match",
-                body: "Any view downloads as Excel, CSV or a vector-sharp PDF, re-run server-side so the file holds the full data, not the page you were looking at.",
-              },
-              {
-                icon: Search,
-                title: "⌘K Anything",
-                body: "One palette across projects, views and tasks — and free text falls through to the agent from wherever you are.",
+                body: "Invite people into a shared workspace, assign work, comment on tasks. Every view, chart and audit entry is scoped to it.",
               },
               {
                 icon: Plug,
                 title: "Connect Your Assistant",
-                body: "Clay speaks MCP. Point Claude Desktop at it with a revocable token and ask about your projects from anywhere — read-only, one workspace.",
-              },
-              {
-                icon: BookOpen,
-                title: "Audited End to End",
-                body: "Created, refined, published, rolled back — and proposals the validator refused. Every agent action traces to the prompt behind it.",
+                body: "Clay speaks MCP. Point Claude Desktop at it and ask about your projects from anywhere — read-only, one workspace, revocable.",
               },
             ].map((card) => (
               <div
@@ -714,14 +677,6 @@ export default async function Home() {
                 a: "No. It works through a small set of vetted, read-only tools: describe the data model, run an approved query, propose a view. Writing isn't one of its abilities. A view can still contain controls that change things — a status dropdown on a table row — but those only ever run when you click them, under your own account, never the agent's.",
               },
               {
-                q: "What happens when I ask for a change?",
-                a: "Each request produces a new version of the view instead of overwriting the last one. You can step back through the full history at any time and continue from any point.",
-              },
-              {
-                q: "Is the data in generated views real?",
-                a: "Yes. Views query the same Postgres database that holds your projects and tasks, so the moment your data changes, the views reflect it.",
-              },
-              {
                 q: "Can I try it without signing up?",
                 a: "Yes, and it isn't a read-only tour. The demo hands you a real workspace pre-filled with six projects and a team — you can create tasks, drag dashboards around, import a spreadsheet and export a workbook. It's the same application a paying customer uses; it just gets deleted after 24 hours.",
               },
@@ -732,10 +687,6 @@ export default async function Home() {
               {
                 q: "Does it work with my team?",
                 a: "Invite people into a shared workspace and everything is scoped to it: assignees, comments, workload charts, the audit log. Owners keep the actions that reshape a workspace, like deleting a project.",
-              },
-              {
-                q: "Can I query Clay from somewhere else?",
-                a: "Clay speaks the Model Context Protocol, so an assistant like Claude Desktop can read your projects and tasks directly. It gets the same allow-listed queries Clay's own agent is restricted to — read-only, scoped to one workspace, behind a token you can revoke.",
               },
               {
                 q: "What is Clay built with?",
