@@ -133,6 +133,19 @@ jobs:
       - name: Apply migrations
         run: npm run db:migrate
 
+      # Ubuntu 23.10+ restricts unprivileged user namespaces through AppArmor,
+      # and Chrome's sandbox is built on them — without this the browser
+      # aborts on launch with "No usable sandbox!" before a single test runs.
+      #
+      # The alternative is passing --no-sandbox to puppeteer, which is the
+      # usual advice and is worse twice over: it turns off a real security
+      # boundary, and it has to be gated on CI or it weakens local runs too —
+      # so the suite would no longer be launching the browser the same way in
+      # both places. Relaxing the setting on a disposable runner VM keeps the
+      # sandbox on and keeps the test code identical everywhere.
+      - name: Allow Chrome's sandbox to use user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
       # Not `npm run test:e2e`: that wrapper lifts .env.local into the
       # environment to dodge a `vercel env pull` footgun, and there is no
       # .env.local here — the job's own env is already the source of truth.
