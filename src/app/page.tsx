@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { optionalClerkUserId } from "@/server/auth/clerk-optional";
 import { redirect } from "next/navigation";
 import { Fraunces } from "next/font/google";
 import Image from "next/image";
@@ -43,7 +43,10 @@ function GitHubMark({ className }: { className?: string }) {
 }
 
 export default async function Home() {
-  const { userId } = await auth();
+  // Not auth() directly: a demo visitor reaches this page with Clerk's
+  // middleware deliberately skipped, and auth() throws in that state rather
+  // than reporting a signed-out user.
+  const userId = await optionalClerkUserId();
   if (userId) {
     redirect("/dashboard");
   }
