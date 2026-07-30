@@ -38,8 +38,6 @@ const withDomainErrors = t.middleware(async ({ next }) => {
   return result;
 });
 
-export const publicProcedure = t.procedure.use(withDomainErrors);
-
 // organizationId here comes only from the authenticated session (never from
 // client input) — this is the org-scoping invariant the whole app relies on.
 export const protectedProcedure = t.procedure.use(withDomainErrors).use(({ ctx, next }) => {

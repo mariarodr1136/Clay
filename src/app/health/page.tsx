@@ -13,11 +13,18 @@ async function checkDb() {
   // enabled later.
   await connection();
   try {
-    const result = await db.execute(sql`select now() as now, current_database() as db`);
-    const row = result[0] as { now: string; db: string };
-    return { ok: true as const, now: row.now, database: row.db };
+    const result = await db.execute(sql`select now() as now`);
+    const row = result[0] as { now: string };
+    return { ok: true as const, now: row.now };
   } catch (error) {
-    return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+    // The error detail is logged server-side and never rendered. This route
+    // is intentionally public (see the middleware matcher), and driver
+    // errors disclose the database host ("getaddrinfo ENOTFOUND
+    // ep-....neon.tech") or the role name when credentials fail ("password
+    // authentication failed for user ..."). The page reports only that the
+    // database is unreachable.
+    console.error("[health] database check failed", error);
+    return { ok: false as const };
   }
 }
 
@@ -62,12 +69,11 @@ export default async function HealthPage() {
         </CardHeader>
         <CardContent className="space-y-1 text-sm">
           {dbStatus.ok ? (
-            <>
-              <p>database: {dbStatus.database}</p>
-              <p>server time: {new Date(dbStatus.now).toISOString()}</p>
-            </>
+            <p>server time: {new Date(dbStatus.now).toISOString()}</p>
           ) : (
-            <p className="text-destructive">{dbStatus.error}</p>
+            <p className="text-destructive">
+              Could not reach the database. See the server logs for details.
+            </p>
           )}
         </CardContent>
       </Card>

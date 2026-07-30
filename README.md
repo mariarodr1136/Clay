@@ -163,7 +163,8 @@ Two notes on PDF export specifically:
 | `npm run test:e2e` | Builds, then drives the real app in headless Chrome through `/demo` (pages, layout editor, writes, exports) |
 | `npm run evals` | Live agent evals — real Claude calls, graded. Needs `ANTHROPIC_API_KEY`; not part of `npm test` |
 | `npm run lint` | ESLint across the project |
-| `npm run build` | Production build |
+| `npm run typecheck` | `tsc --noEmit` over the project. Clears `.next/dev/types` first — only `next dev` writes that directory and it does not prune routes that have since been deleted, so a stale copy reports errors for files that no longer exist |
+| `npm run build` | Production build (also type-checks, which is how CI covers types) |
 | `npm run db:push` | Push the Drizzle schema straight to Postgres (dev convenience) |
 | `npm run db:generate` / `db:migrate` | Generate versioned SQL migrations from the schema / apply them |
 | `npm run db:studio` | Open Drizzle Studio to browse the database |
