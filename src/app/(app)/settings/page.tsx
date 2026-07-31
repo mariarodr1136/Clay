@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { AgentUsagePanel } from "@/components/agent/usage-panel";
 
 function CopyableToken({ token }: { token: string }) {
   const [copied, setCopied] = useState(false);
@@ -187,6 +188,8 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </section>
+
+      <AgentUsagePanel />
     </div>
   );
 }
