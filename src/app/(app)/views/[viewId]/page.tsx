@@ -114,7 +114,10 @@ export default function ViewPage() {
               })}
             </p>
           </div>
-          <div className="print-hidden flex items-center gap-2">
+          {/* Five actions sit here at full width; on a phone they have to be
+              allowed to fall onto a second line rather than push the page
+              sideways. */}
+          <div className="print-hidden flex flex-wrap items-center gap-2">
             <Button
               size="sm"
               variant={editingLayout ? "default" : "outline"}

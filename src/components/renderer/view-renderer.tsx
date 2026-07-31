@@ -82,6 +82,18 @@ export function ViewRenderer({
   const { widgets, layout } = parsed.data;
   const layoutById = new Map(layout.widgets.map((l) => [l.id, l]));
 
+  // Reading order (top row first, then left to right), which is the order the
+  // widgets stack in on a phone and the order they're tabbed through
+  // everywhere. Desktop placement is absolute, so this can't move anything
+  // visually there. A widget with no layout entry sorts last rather than
+  // first: it renders as an error card, and that shouldn't lead the view.
+  const ordered = [...widgets].sort((a, b) => {
+    const la = layoutById.get(a.id);
+    const lb = layoutById.get(b.id);
+    if (!la || !lb) return la ? -1 : lb ? 1 : 0;
+    return la.y - lb.y || la.x - lb.x;
+  });
+
   const handleFilterChange = (key: string, value: string) => {
     const next = { ...filters };
     if (value) next[key] = value;
@@ -90,16 +102,16 @@ export function ViewRenderer({
     onFiltersChange?.(next);
   };
 
+  // Placement is published as custom properties rather than applied directly:
+  // globals.css decides per breakpoint whether to honour the authored grid or
+  // stack the widgets full-width. See the .view-grid rules there.
   return (
-    <div
-      className="grid gap-4"
-      style={{ gridTemplateColumns: "repeat(12, minmax(0, 1fr))", gridAutoRows: "100px" }}
-    >
-      {widgets.map((widget) => {
+    <div className="view-grid grid gap-4">
+      {ordered.map((widget) => {
         const layoutItem = layoutById.get(widget.id);
         if (!layoutItem) {
           return (
-            <div key={widget.id} style={{ gridColumn: "span 12" }}>
+            <div key={widget.id} className="view-grid-item">
               <FallbackWidget reason={`widget "${widget.id}" has no layout entry`} />
             </div>
           );
@@ -107,10 +119,16 @@ export function ViewRenderer({
         return (
           <div
             key={widget.id}
-            style={{
-              gridColumn: `${layoutItem.x + 1} / span ${layoutItem.w}`,
-              gridRow: `${layoutItem.y + 1} / span ${layoutItem.h}`,
-            }}
+            className="view-grid-item"
+            style={
+              {
+                "--widget-column": `${layoutItem.x + 1} / span ${layoutItem.w}`,
+                "--widget-row": `${layoutItem.y + 1} / span ${layoutItem.h}`,
+                // Row span as a bare number, so the stacked layout can turn
+                // it back into a pixel height. See .view-grid in globals.css.
+                "--widget-rows": layoutItem.h,
+              } as React.CSSProperties
+            }
           >
             <WidgetSwitch widget={widget} filters={filters} onFilterChange={handleFilterChange} />
           </div>

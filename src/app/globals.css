@@ -147,6 +147,78 @@
   }
 }
 
+/* The generated-view grid.
+
+   A view's layout is authored against 12 columns, and every widget carries an
+   absolute (x, y, w, h) — which is exactly right on a laptop and unreadable on
+   a phone, where a 3-column KPI tile lands about 90px wide. So the geometry
+   lives here rather than in inline styles: the renderer publishes each
+   widget's placement as custom properties and this stylesheet decides, per
+   breakpoint, whether to honour them.
+
+   Mobile-first, so the narrow case is the default and needs no query: one
+   column, every widget full-width, rows sized to their content. The authored
+   grid comes back at `md`. Widgets are emitted in reading order (row, then
+   column) so the stacked order matches what the desktop layout reads like —
+   which also fixes tab order on desktop, where DOM order was previously just
+   whatever order the agent happened to emit widgets in. */
+.view-grid {
+  /* minmax(0, …) rather than a bare 1fr, for the same reason the 12-column
+     rule below has always used it: `1fr` floors at min-content, so one wide
+     widget — a table with six columns in it — ratchets the track past the
+     container and takes the whole page into horizontal scroll. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: auto;
+}
+
+.view-grid-item {
+  grid-column: 1 / -1;
+  /* Each widget keeps the height it was authored with (its row span × the
+     100px row), rather than being sized by its content.
+
+     Content-sizing was the obvious choice and the wrong one: a chart is a
+     ResponsiveContainer asking for 100% of its parent, so in an auto-height
+     row there is nothing for that percentage to resolve against and the
+     chart renders at zero height — a card with a title, a legend, and a
+     blank space where the data should be. A definite height fixes that and
+     has the side benefit of preserving the proportions the view was
+     designed with: a tile stays short, a chart stays tall.
+
+     min-height, not height, so a widget whose text wraps onto more lines at
+     phone width can still grow past its authored box instead of clipping. */
+  min-height: calc(var(--widget-rows, 2) * 100px);
+}
+
+@media (min-width: 768px) {
+  .view-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-auto-rows: 100px;
+  }
+
+  .view-grid-item {
+    grid-column: var(--widget-column);
+    grid-row: var(--widget-row);
+  }
+}
+
+/* Print renders through the same component, but a print media query resolves
+   against the paper box rather than the viewport, so the `min-width` above
+   can't be relied on to match. Stating the authored grid again here keeps the
+   PDF on 12 columns no matter how the print width is computed — a landscape
+   page has the room for it, and a single-column PDF of a dashboard would be
+   a regression in the export, not a mobile improvement. */
+@media print {
+  .view-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-auto-rows: 100px;
+  }
+
+  .view-grid-item {
+    grid-column: var(--widget-column);
+    grid-row: var(--widget-row);
+  }
+}
+
 /* Print is the PDF path: every browser's print dialog can "Save as PDF", and
    because the widgets are real SVG/text, the result stays vector-sharp. No
    headless browser, no rasterized screenshot. */
