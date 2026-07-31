@@ -5,6 +5,8 @@ import { db } from "@/server/db/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
+export { noIndex as metadata } from "@/lib/no-index";
+
 async function checkDb() {
   // Without this, the page prerenders at build time and every later request
   // is served a health check frozen at whenever the build ran. connection()

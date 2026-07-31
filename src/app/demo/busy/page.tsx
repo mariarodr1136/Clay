@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
+export { noIndex as metadata } from "@/lib/no-index";
+
 // Shown when the per-IP rate limit on demo workspace creation trips. Each
 // visit provisions a real tenant, so this is what stops one network from
 // filling the database.
