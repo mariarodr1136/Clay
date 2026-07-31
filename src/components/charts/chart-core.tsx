@@ -119,16 +119,71 @@ function ChartTip({
   );
 }
 
+// A chart is an SVG of coloured paths: sighted readers get the shape, screen
+// reader users get silence. Recharts can't fix that from the inside — the
+// marks have no text to read in any useful order — so every chart renders its
+// numbers a second time as a real table, visually hidden, and the drawing
+// itself is marked aria-hidden so the two aren't announced twice.
+//
+// A table rather than a summary sentence: the underlying data is already
+// tabular (it came from a catalog query), so this is the same information in
+// the same shape, not a lossy paraphrase someone has to trust.
+function ChartDataTable({
+  caption,
+  columns,
+  rows,
+}: {
+  caption: string;
+  columns: { key: string; label: string }[];
+  rows: Record<string, unknown>[];
+}) {
+  return (
+    <table className="sr-only">
+      <caption>{caption}</caption>
+      <thead>
+        <tr>
+          {columns.map((column) => (
+            <th key={column.key} scope="col">
+              {column.label}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={i}>
+            {columns.map((column, j) => {
+              const value = pretty(row[column.key]);
+              // First cell is the row's identity (the x-axis category), so
+              // it's a header — that's what lets a screen reader announce
+              // "March, Completed, 12" instead of three bare numbers.
+              return j === 0 ? (
+                <th key={column.key} scope="row">
+                  {value}
+                </th>
+              ) : (
+                <td key={column.key}>{value}</td>
+              );
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 export function CartesianChartCore({
   variant,
   xField,
   series,
   rows,
+  title,
 }: {
   variant: CartesianVariant;
   xField: string;
   series: ChartSeriesDef[];
   rows: Record<string, unknown>[];
+  title?: string;
 }) {
   const gradientBase = useId().replace(/:/g, "");
   const lastStackedIndex = series.length - 1;
@@ -136,7 +191,16 @@ export function CartesianChartCore({
   const singleSeriesBar = variant === "bar" && series.length === 1 && rows.length <= 8;
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
+    <>
+      <ChartDataTable
+        caption={title ? `${title} (chart data)` : "Chart data"}
+        columns={[
+          { key: xField, label: xField },
+          ...series.map((s) => ({ key: s.key, label: s.label })),
+        ]}
+        rows={rows}
+      />
+      <ResponsiveContainer width="100%" height="100%" aria-hidden>
       <ComposedChart data={rows} margin={{ top: 12, right: 12, left: -12, bottom: 0 }}>
         <defs>
           {series.map((s, i) => (
@@ -244,7 +308,8 @@ export function CartesianChartCore({
           );
         })}
       </ComposedChart>
-    </ResponsiveContainer>
+      </ResponsiveContainer>
+    </>
   );
 }
 
@@ -280,10 +345,15 @@ export function DonutChartCore({
   }
   const total = slices.reduce((sum, s) => sum + s.value, 0);
 
+  // No hidden data table here, unlike the cartesian charts: the donut already
+  // renders its own legend as real text — every slice name and value, plus
+  // the total in the centre — so the numbers are reachable without one. Only
+  // the SVG needs silencing, and the centre total needs saying properly:
+  // "128" beside a label is unambiguous on screen and meaningless read aloud.
   return (
     <div className="flex h-full items-center gap-5">
       <div className="relative h-full min-w-0 flex-1">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" aria-hidden>
           <PieChart margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
             <Pie
               data={slices}
@@ -322,14 +392,28 @@ export function DonutChartCore({
           </PieChart>
         </ResponsiveContainer>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-semibold">{total.toLocaleString()}</span>
-          {centerLabel && <span className="text-muted-foreground text-[11px]">{centerLabel}</span>}
+          <span className="text-2xl font-semibold" aria-hidden>
+            {total.toLocaleString()}
+          </span>
+          {centerLabel && (
+            <span className="text-muted-foreground text-[11px]" aria-hidden>
+              {centerLabel}
+            </span>
+          )}
+          {/* The visual pair reads as a unit; spoken, it needs joining up. */}
+          <span className="sr-only">
+            {centerLabel ? `${total.toLocaleString()} ${centerLabel} in total` : `${total.toLocaleString()} in total`}
+          </span>
         </div>
       </div>
       <ul className="shrink-0 space-y-1.5 pr-1">
         {slices.map((s) => (
           <li key={s.name} className="flex items-center gap-2 text-xs">
-            <span className="size-2 shrink-0 rounded-full" style={{ background: s.color }} />
+            <span
+              className="size-2 shrink-0 rounded-full"
+              style={{ background: s.color }}
+              aria-hidden
+            />
             <span className="text-muted-foreground">{s.name}</span>
             <span className="ml-auto pl-3 font-medium tabular-nums">{s.value}</span>
           </li>

@@ -8,6 +8,8 @@ import { parseView } from "@/lib/dsl/validate";
 import { preloadViewQueries } from "@/server/export/preload";
 import { SharedViewDocument } from "@/components/views/shared-view-document";
 
+export { noIndex as metadata } from "@/lib/no-index";
+
 // Public, read-only rendering of a shared view. Authorization is the token
 // itself: unguessable, view-specific, revocable. Every query still runs
 // server-side scoped to the view's own organization — the visitor gets a

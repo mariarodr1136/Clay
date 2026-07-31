@@ -349,14 +349,17 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
-      <div className="flex items-center justify-between gap-4">
+      {/* Wraps rather than sitting on one line: the sort picker and two
+          buttons come to ~435px, which a phone doesn't have, and an
+          unwrapped row put the whole page into horizontal scroll. */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-1">
           <h1 className="text-3xl font-semibold tracking-tight">Projects</h1>
           <p className="text-muted-foreground text-sm">
             Everything you&apos;re tracking, in one place.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
         {projects.length > 0 && (
           <Select value={sort} onValueChange={(value) => setSort(value as typeof sort)}>
             <SelectTrigger size="sm" className="w-40">

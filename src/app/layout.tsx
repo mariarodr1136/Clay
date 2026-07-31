@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { TRPCProvider } from "@/lib/trpc/provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -38,6 +40,14 @@ export default function RootLayout({
           <TRPCProvider>{children}</TRPCProvider>
           <Toaster />
         </ThemeProvider>
+        {/* Page views and Core Web Vitals. Both no-op outside Vercel, so
+            local dev and the CI build are unaffected, and neither reads
+            cookies or builds a cross-site profile — which is why they sit in
+            the root layout rather than behind a consent gate. Nothing here
+            reports view contents or prompts; those already have a first-party
+            trail in activity_log and agent_runs. */}
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

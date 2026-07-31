@@ -24,14 +24,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-screen flex-col">
       {isGuest && <DemoBanner />}
       <header className="print-hidden sticky top-0 z-40 border-b border-black/[0.06] bg-background/80 backdrop-blur-xl backdrop-saturate-150 dark:border-white/[0.08]">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5 sm:px-8">
-          <div className="flex items-center gap-8">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3.5 sm:px-8">
+          {/* Tighter on a phone, where the logo, workspace badge and nav
+              trigger are competing for the same row. */}
+          <div className="flex min-w-0 items-center gap-3 sm:gap-8">
             <Link href="/dashboard" className="flex items-center gap-2.5">
               <Image src="/logo.png" alt="" width={28} height={28} className="size-7" />
               <span className="text-[15px] font-semibold tracking-tight">Clay</span>
             </Link>
             {isGuest ? (
-              <span className="bg-muted text-muted-foreground rounded-full px-2.5 py-0.5 text-xs font-medium">
+              <span className="bg-muted text-muted-foreground max-w-32 truncate rounded-full px-2.5 py-0.5 text-xs font-medium sm:max-w-none">
                 {org?.name ?? "Demo Workspace"}
               </span>
             ) : (
@@ -43,7 +45,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <SafeBoundary
                 label="workspace-switcher"
                 fallback={
-                  <span className="bg-muted text-muted-foreground rounded-full px-2.5 py-0.5 text-xs font-medium">
+                  <span className="bg-muted text-muted-foreground max-w-32 truncate rounded-full px-2.5 py-0.5 text-xs font-medium sm:max-w-none">
                     {org?.name ?? "Workspace"}
                   </span>
                 }
@@ -60,7 +62,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </div>
       </header>
-      <main className="flex-1 px-6 py-10 sm:px-8 sm:py-12">{children}</main>
+      <main className="flex-1 px-4 py-6 sm:px-8 sm:py-12">{children}</main>
     </div>
   );
 
