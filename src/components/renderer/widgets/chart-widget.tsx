@@ -30,12 +30,25 @@ export function ChartWidget({
       ? widget.config.series
       : [{ key: yField ?? "count", label: widget.title ?? yField ?? "Value" }];
   const showLegend = chartType !== "donut" && series.length > 1;
+  const titleId = `chart-title-${widget.id}`;
 
   return (
-    <Card className="flex h-full flex-col gap-3">
+    // A dashboard is a page of these; making each one a named region is what
+    // lets a screen reader user jump between them rather than walking the
+    // whole grid. Falls back to no role when there's no title to name it
+    // with, since an unnamed region is just noise in the landmark list.
+    <Card
+      className="flex h-full flex-col gap-3"
+      role={widget.title ? "region" : undefined}
+      aria-labelledby={widget.title ? titleId : undefined}
+    >
       {(widget.title || showLegend) && (
         <CardHeader className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
-          {widget.title && <CardTitle className="min-w-0 text-sm">{widget.title}</CardTitle>}
+          {widget.title && (
+            <CardTitle id={titleId} className="min-w-0 text-sm">
+              {widget.title}
+            </CardTitle>
+          )}
           {showLegend && <ChartLegend series={series} />}
         </CardHeader>
       )}
@@ -62,6 +75,7 @@ export function ChartWidget({
               xField={xField ?? ""}
               series={series}
               rows={rows}
+              title={widget.title}
             />
           )
         )}
